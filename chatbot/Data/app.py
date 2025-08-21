@@ -1,4 +1,4 @@
-# app.py
+### welfare-fetch-to-s3 ###
 import os, json, time, datetime, urllib.parse
 import boto3
 from botocore.config import Config
