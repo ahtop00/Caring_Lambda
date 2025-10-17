@@ -35,7 +35,7 @@ PROMPT_TEMPLATE = """Human:
                   {context_str}
                   ---
                   [사용자 정보]
-                  {user_info_for_prompt}
+                  {user_info}
                   ---
                   [사용자의 질문]
                   {user_chat}
