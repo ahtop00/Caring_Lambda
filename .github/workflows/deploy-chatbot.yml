@@ -62,5 +62,5 @@ jobs:
       - name: Deploy to AWS Lambda
         run: |
           aws lambda update-function-code \
-            --function-name YOUR_CHATBOT_LAMBDA_NAME \
+            --function-name welfare-chatbot-handler \
             --zip-file fileb://deploy-chatbot.zip
