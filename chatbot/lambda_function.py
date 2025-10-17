@@ -19,6 +19,10 @@ def lambda_handler(event, context):
         user_chat = request_data['user_chat']
         user_info = request_data['user_info']
 
+        # bedrock 플래그를 body에서 직접 읽어옴
+        body = json.loads(event.get('body', '{}'))
+        use_bedrock = body.get('bedrock', False)
+
         # 검색을 위한 데이터 준비
         locations = data_processor.extract_locations(user_chat)
         embedding = llm_service.get_embedding(user_chat)
@@ -38,7 +42,8 @@ def lambda_handler(event, context):
         final_prompt = prompts.get_final_prompt(context_str, user_info, user_chat)
 
         # LLM 호출 및 응답 파싱
-        llm_response_str = llm_service.get_anthropic_response(final_prompt)
+        # get_anthropic_response -> get_llm_response로 변경하고 use_bedrock 플래그 전달
+        llm_response_str = llm_service.get_llm_response(final_prompt, use_bedrock=use_bedrock)
 
         json_match = re.search(r'\{.*\}', llm_response_str, re.DOTALL)
         if not json_match:
