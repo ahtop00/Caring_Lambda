@@ -10,6 +10,18 @@ on:
     paths:
       - 'chatbot/**'
 
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+        type: choice
+        options:
+          - info
+          - warning
+          - debug
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
