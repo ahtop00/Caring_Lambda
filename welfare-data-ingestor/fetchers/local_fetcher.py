@@ -6,21 +6,9 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from typing import List, Optional, Dict, Any
 
-# 상위 폴더의 모듈 임포트
-# (만약 'ModuleNotFoundError'가 발생하면 sys.path 조정이 필요할 수 있습니다)
-try:
-    from fetchers.base_fetcher import BaseWelfareFetcher
-    from common_dto import CommonServiceDTO
-    from config import API_CONSTANT_PARAMS # 지자체용 파라미터
-except ImportError:
-    # Lambda 환경이 아닌 로컬 테스트 등에서 경로 문제가 생길 경우
-    import sys
-    import os
-    # 현재 파일의 상위 디렉토리를 경로에 추가
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from fetchers.base_fetcher import BaseWelfareFetcher
-    from common_dto import CommonServiceDTO
-    from config import API_CONSTANT_PARAMS
+from fetchers.base_fetcher import BaseWelfareFetcher
+from common_dto import CommonServiceDTO
+from config import API_CONSTANT_PARAMS # 지자체용 파라미터
 
 logger = logging.getLogger()
 

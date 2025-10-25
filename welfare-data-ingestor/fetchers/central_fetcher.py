@@ -6,20 +6,9 @@ import urllib.parse
 import urllib.request
 from typing import List, Optional, Dict, Any
 
-# 상위 폴더의 모듈 임포트
-try:
-    from fetchers.base_fetcher import BaseWelfareFetcher
-    from common_dto import CommonServiceDTO
-    # config에서 중앙부처용 상수와 키를 가져옵니다.
-    from config import CENTRAL_API_CONSTANT_PARAMS, CENTRAL_API_KEY
-except ImportError:
-    # 로컬 테스트 등에서 경로 문제가 생길 경우
-    import sys
-    import os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from fetchers.base_fetcher import BaseWelfareFetcher
-    from common_dto import CommonServiceDTO
-    from config import CENTRAL_API_CONSTANT_PARAMS, CENTRAL_API_KEY
+from fetchers.base_fetcher import BaseWelfareFetcher
+from common_dto import CommonServiceDTO
+from config import CENTRAL_API_CONSTANT_PARAMS, CENTRAL_API_KEY
 
 
 logger = logging.getLogger()
@@ -137,7 +126,7 @@ class CentralWelfareFetcher(BaseWelfareFetcher):
             # 배열 필드 매핑
             target_audience=_split_text(item.get('trgterIndvdlArray')),
             life_cycle=_split_text(item.get('lifeArray')),
-            interest_theme=_split_text(item.get('intrsThemaArray')),
+            interest_theme=_split_text(item.get('intrsThemaNmArray')),
 
             # 기타 필드
             support_cycle=item.get('sprtCycNm'),
