@@ -1,0 +1,64 @@
+# 워크플로우 이름
+name: Deploy Welfare Service Data Ingestor Lambda to AWS
+
+# 언제 실행할지 정의: main 브랜치에 push될 때
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'welfare-data-ingestor/**'
+
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+        type: choice
+        options:
+          - info
+          - warning
+          - debug
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # 1. GitHub 저장소의 코드를 가져옵니다.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Python 환경을 설정합니다.
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      # 3. 라이브러리를 설치하고 배포용 zip 파일을 생성합니다.
+      - name: Install dependencies and create ZIP file
+        run: |
+          cd welfare-data-ingestor
+          # requirements.txt에 명시된 라이브러리를 현재 디렉토리에 설치
+          pip install -r requirements.txt -t .
+          # 설치된 라이브러리와 모든 소스 코드를 함께 압축
+          zip -r ../deploy-chatbot.zip .
+
+      # 4. AWS 자격 증명을 설정합니다. (IAM Role 사용 권장)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # ⚠️ IAM 역할 ARN을 여기에 입력하세요.
+          role-to-assume: arn:aws:iam::084056488795:role/GitHubActions-Lambda-DeployRole
+          aws-region: ap-northeast-2
+
+      # 5. AWS CLI를 사용해 Lambda 함수 코드를 업데이트합니다.
+      - name: Deploy to AWS Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name welfare-data-ingestor \
+            --zip-file fileb://deploy-chatbot.zip
