@@ -2,14 +2,18 @@
 import json
 import logging
 import time
+from typing import List
 
 import boto3
 from botocore.exceptions import ClientError
 
-import config
-from api_fetcher import ApiFetcher
+import config  # 'LOCAL_', 'CENTRAL_' 변수가 포함된 새 config
+# 'fetchers/' 폴더에서 두 Fetcher를 모두 임포트
+from fetchers.local_fetcher import LocalWelfareFetcher
+from fetchers.central_fetcher import CentralWelfareFetcher
 from embedding_service import EmbeddingService
 from repository import WelfareRepository
+from common_dto import CommonServiceDTO
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -17,17 +21,25 @@ logger.setLevel(logging.INFO)
 try:
     bedrock_runtime_client = boto3.client(service_name='bedrock-runtime')
 
-    fetcher = ApiFetcher(
-        api_endpoint=config.API_ENDPOINT,
-        service_key=config.SERVICE_KEY,
-        rows_per_page=config.ROWS_PER_PAGE
-    )
-
     embedder = EmbeddingService(
         bedrock_runtime=bedrock_runtime_client,
         model_id=config.BEDROCK_MODEL_ID
     )
-    logger.info("필수 서비스 모듈(Fetcher, Embedder) 초기화 완료.")
+
+    fetchers = {
+        "local": LocalWelfareFetcher(
+            api_endpoint=config.LOCAL_API_ENDPOINT,
+            service_key=config.LOCAL_API_KEY,
+            rows_per_page=config.LOCAL_ROWS_PER_PAGE
+        ),
+        "central": CentralWelfareFetcher(
+            api_endpoint=config.CENTRAL_API_ENDPOINT,
+            service_key=config.CENTRAL_API_KEY,
+            rows_per_page=config.CENTRAL_ROWS_PER_PAGE
+        )
+    }
+
+    logger.info(f"필수 모듈(Embedder, Fetcher {len(fetchers)}개) 초기화 완료.")
 
 except Exception as e:
     logger.error(f"FATAL: 전역 모듈 초기화 실패: {e}")
@@ -36,79 +48,110 @@ except Exception as e:
 
 def handler(event, context):
     """
-    AWS Lambda 메인 핸들러
-    1. API를 호출하여 복지 서비스 데이터를 가져옵니다.
-    2. DB에서 기존 데이터를 조회하여 신규 서비스만 필터링합니다.
-    3. 신규 서비스의 텍스트를 Bedrock을 통해 임베딩합니다.
-    4. 신규 서비스와 임베딩을 DB에 저장합니다.
+    AWS Lambda 메인 핸들러 (라우터)
+    event에 포함된 'source' 파라미터에 따라 적절한 Fetcher를 실행합니다.
+    - {"source": "local"}   -> LocalWelfareFetcher 실행
+    - {"source": "central"} -> CentralWelfareFetcher 실행
+    - {} (파라미터 없음)     -> 모든 Fetcher를 순차 실행 (테스트용)
     """
-    logger.info(f"## Lambda 실행 시작 (시작 페이지: {config.START_PAGE}, 페이지 제한: {config.PAGE_LIMIT}) ##")
+
+    # 'source' 파라미터 확인
+    source_to_run = event.get("source")
+
+    fetcher_list_to_run = []
+
+    if source_to_run:
+        if source_to_run in fetchers:
+            # "local" 또는 "central"이 명시된 경우
+            logger.info(f"## 'source: {source_to_run}' 파라미터 감지, 해당 Fetcher만 실행 ##")
+            fetcher_list_to_run.append(fetchers[source_to_run])
+        else:
+            # "source"가 왔는데 모르는 값이면 에러 처리
+            logger.error(f"알 수 없는 'source' 값입니다: {source_to_run}")
+            return {'statusCode': 400, 'body': 'Invalid source parameter'}
+    else:
+        # 파라미터가 없으면 모든 Fetcher를 순차 실행 (안전한 기본값)
+        logger.info(f"## 'source' 파라미터 없음, 정의된 모든 Fetcher 순차 실행 ##")
+        fetcher_list_to_run = list(fetchers.values())
+
 
     total_inserted_count = 0
-    repo = None  # DB 커넥션은 핸들러 내에서 생성/종료
+    repo = None
 
     try:
-        # 1. 리포지토리(DB) 초기화 (매 실행 시마다 새 연결)
         repo = WelfareRepository(config.DB_CONFIG)
 
-        end_page = config.START_PAGE + config.PAGE_LIMIT
-        for page in range(config.START_PAGE, end_page):
-            logger.info(f"--- API 페이지 {page}/{end_page - 1} 조회 시작 ---")
+        for fetcher in fetcher_list_to_run:
+            fetcher_name = fetcher.__class__.__name__
+            logger.info(f"--- Fetcher '{fetcher_name}' 작업 시작 ---")
 
-            # 2. (Fetcher) API로부터 서비스 조회
-            services_from_api = fetcher.fetch_services_by_page(page, event)
-            if not services_from_api:
-                logger.info(f"페이지 {page}에서 더 이상 조회된 서비스가 없어 전체 작업을 중단합니다.")
-                break
+            # 각 Fetcher에 맞는 설정값(페이지)을 config에서 가져오기
+            if "Local" in fetcher_name:
+                start_page = config.LOCAL_START_PAGE
+                page_limit = config.LOCAL_PAGE_LIMIT
+            elif "Central" in fetcher_name:
+                start_page = config.CENTRAL_START_PAGE
+                page_limit = config.CENTRAL_PAGE_LIMIT
+            else:
+                # 기본값
+                start_page = 1
+                page_limit = 5
 
-            logger.info(f"페이지 {page}에서 {len(services_from_api)}개의 서비스를 API로부터 수신했습니다.")
+            end_page = start_page + page_limit
+            for page in range(start_page, end_page):
+                logger.info(f"--- API 페이지 {page}/{end_page - 1} 조회 시작 ({fetcher_name}) ---")
 
-            # 3. (Repository) 기존 ID 조회 및 신규 서비스 필터링
-            ids_from_api = [s.get('servId') for s in services_from_api if s.get('servId')]
-            if not ids_from_api:
-                logger.info(f"페이지 {page}에 유효한 ID가 없습니다. 다음 페이지로 넘어갑니다.")
-                continue
+                # (Fetcher) API -> DTO 리스트 조회
+                # 'event'를 그대로 넘겨주면, 'searchWrd' 같은 추가 파라미터도 전달 가능
+                service_dtos: List[CommonServiceDTO] = fetcher.fetch_services_by_page(page, event)
 
-            existing_ids = repo.get_existing_ids(ids_from_api)
-            new_services = [s for s in services_from_api if s.get('servId') not in existing_ids]
+                if not service_dtos:
+                    logger.info(f"페이지 {page}에서 더 이상 조회된 서비스가 없어 '{fetcher_name}' 작업을 중단합니다.")
+                    break
 
-            if not new_services:
-                logger.info(f"페이지 {page}에는 신규 서비스가 없습니다. 다음 페이지로 넘어갑니다.")
-                continue
+                logger.info(f"페이지 {page}에서 {len(service_dtos)}개의 DTO를 API로부터 수신했습니다.")
 
-            # 4. (Embedder & Repository) 신규 서비스 처리
-            logger.info(f"페이지 {page}에서 {len(new_services)}개의 신규 서비스를 발견했습니다. 임베딩 및 DB 저장을 시작합니다.")
-            page_inserted_count = 0
-            for service in new_services:
-                try:
-                    # 4-1. (Embedder) 임베딩 생성
-                    embedding = embedder.create_embedding_for_service(service)
+                # (Repository) 기존 ID 조회 및 DTO 필터링
+                ids_from_api = [dto.service_id for dto in service_dtos if dto.service_id]
+                if not ids_from_api:
+                    logger.info(f"페이지 {page}에 유효한 ID가 없습니다. 다음 페이지로 넘어갑니다.")
+                    continue
 
-                    # 4-2. (Repository) DB 저장
-                    repo.insert_service(service, embedding)
-                    page_inserted_count += 1
+                existing_ids = repo.get_existing_ids(ids_from_api)
 
-                    # Bedrock API 속도 조절 (필요시)
-                    time.sleep(0.1)
+                # DTO 리스트 필터링
+                new_service_dtos = [dto for dto in service_dtos if dto.service_id not in existing_ids]
 
-                except ClientError as ce:
-                    logger.error(f"Bedrock API 오류 (ServiceId: {service.get('servId')}): {ce}")
-                    # 개별 서비스 임베딩 실패 시, 다음 서비스로 계속 진행
-                except Exception as item_e:
-                    logger.error(f"개별 서비스 처리 오류 (ServiceId: {service.get('servId')}): {item_e}")
-                    # 개별 서비스 DB 저장 실패 시, 롤백하지 않고 다음으로 넘어감 (선택적)
+                if not new_service_dtos:
+                    logger.info(f"페이지 {page}에는 신규 서비스가 없습니다. 다음 페이지로 넘어갑니다.")
+                    continue
 
-            # 5. (Repository) 페이지 단위 커밋
-            if page_inserted_count > 0:
-                repo.commit()
-                logger.info(f"페이지 {page}의 신규 서비스 {page_inserted_count}개 항목을 DB에 커밋했습니다.")
-            total_inserted_count += page_inserted_count
+                # (Embedder & Repository) 신규 DTO 처리
+                logger.info(f"페이지 {page}에서 {len(new_service_dtos)}개의 신규 서비스를 발견했습니다. 임베딩 및 DB 저장을 시작합니다.")
+                page_inserted_count = 0
+                for dto in new_service_dtos:
+                    try:
+                        # Embedder에 DTO 전달
+                        embedding = embedder.create_embedding_for_service(dto)
 
-            logger.info("API 과호출 방지를 위해 1초 대기합니다.")
-            time.sleep(1)
+                        # Repository에 DTO 전달
+                        repo.insert_service(dto, embedding)
+                        page_inserted_count += 1
+                        time.sleep(0.1) # Bedrock API 속도 조절
 
-        logger.info(f"총 {total_inserted_count}개의 신규 레코드를 성공적으로 추가했습니다.")
-        return {'statusCode': 200, 'body': json.dumps(f"성공적으로 총 {total_inserted_count}개의 신규 서비스를 처리했습니다.")}
+                    except ClientError as ce:
+                        logger.error(f"Bedrock API 오류 (ServiceId: {dto.service_id}): {ce}")
+                    except Exception as item_e:
+                        logger.error(f"개별 DTO 처리 오류 (ServiceId: {dto.service_id}): {item_e}")
+
+                # (Repository) 페이지 단위 커밋
+                if page_inserted_count > 0:
+                    repo.commit()
+                    logger.info(f"페이지 {page} ({fetcher_name}) 신규 서비스 {page_inserted_count}개 커밋 완료.")
+                total_inserted_count += page_inserted_count
+
+                logger.info("API 과호출 방지를 위해 1초 대기합니다.")
+                time.sleep(1) # API 속도 조절
 
     except Exception as e:
         logger.error(f"예상치 못한 오류 발생: {e}", exc_info=True)
@@ -117,4 +160,6 @@ def handler(event, context):
 
     finally:
         if repo: repo.close()
-        logger.info("## Lambda 실행 종료 ##")
+        logger.info(f"## Lambda 실행 종료 (총 {total_inserted_count}개 추가) ##")
+
+    return {'statusCode': 200, 'body': json.dumps(f"성공적으로 총 {total_inserted_count}개의 신규 서비스를 처리했습니다.")}

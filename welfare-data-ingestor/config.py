@@ -18,15 +18,23 @@ def get_int_env_variable(var_name, default):
     try:
         return int(os.environ.get(var_name, default))
     except ValueError:
-        logger.error(f"환경 변수 {var_name}이 정수가 아닙니다. 기본값 {default}을 사용합니다.")
+        logger.warning(f"환경 변수 {var_name}이 정수가 아닙니다. 기본값 {default}을 사용합니다.")
         return default
 
-# ===== API Fetcher용 변수 =====
-API_ENDPOINT = get_env_variable("API_ENDPOINT")
-SERVICE_KEY  = get_env_variable("SERVICE_KEY")
-ROWS_PER_PAGE = get_int_env_variable("ROWS_PER_PAGE", 100)
-PAGE_LIMIT    = get_int_env_variable("PAGE_LIMIT", 100)
-START_PAGE    = get_int_env_variable("START_PAGE", 1)
+# ===== 1. 지자체 API 변수 =====
+LOCAL_API_ENDPOINT = get_env_variable("LOCAL_API_ENDPOINT")
+LOCAL_API_KEY      = get_env_variable("LOCAL_API_KEY")
+LOCAL_ROWS_PER_PAGE = get_int_env_variable("LOCAL_ROWS_PER_PAGE", 100)
+LOCAL_PAGE_LIMIT    = get_int_env_variable("LOCAL_PAGE_LIMIT", 5)
+LOCAL_START_PAGE    = get_int_env_variable("LOCAL_START_PAGE", 1)
+
+# ===== 중앙부처 API 변수 =====
+CENTRAL_API_ENDPOINT = get_env_variable("CENTRAL_API_ENDPOINT")
+CENTRAL_API_KEY      = get_env_variable("CENTRAL_API_KEY")
+CENTRAL_ROWS_PER_PAGE = get_int_env_variable("CENTRAL_ROWS_PER_PAGE", 100)
+CENTRAL_PAGE_LIMIT    = get_int_env_variable("CENTRAL_PAGE_LIMIT", 5)
+CENTRAL_START_PAGE    = get_int_env_variable("CENTRAL_START_PAGE", 1)
+
 
 # ===== Vector DB Ingestor용 변수 =====
 DB_CONFIG = {
@@ -39,10 +47,16 @@ DB_CONFIG = {
 # ===== Bedrock용 변수 =====
 BEDROCK_MODEL_ID = get_env_variable("BEDROCK_MODEL_ID", "amazon.titan-embed-text-v2:0")
 
-# ===== API 상수 =====
-# API 파라미터 중 고정값
+# ===== 지자체 API 상수 =====
 API_CONSTANT_PARAMS = {
     "trgterIndvdlArray": "040", # 장애인
     "srchKeyCode": "003",       # 상세내용
     "arrgOrd": "001"            # 최종수정일
+}
+
+# 5-2. 중앙부처 API 고정 파라미터
+CENTRAL_API_CONSTANT_PARAMS = {
+    "srchKeyCode": "003", # 제목+내용
+    # (API 명세서 이미지 참고) 필요에 따라 'lifeArray' 등 다른 고정값을 추가할 수 있습니다.
+    # "lifeArray": "002,003", # 예: 청년, 중장년
 }
