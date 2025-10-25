@@ -57,6 +57,6 @@ API_CONSTANT_PARAMS = {
 # 5-2. 중앙부처 API 고정 파라미터
 CENTRAL_API_CONSTANT_PARAMS = {
     "srchKeyCode": "003", # 제목+내용
-    # (API 명세서 이미지 참고) 필요에 따라 'lifeArray' 등 다른 고정값을 추가할 수 있습니다.
-    # "lifeArray": "002,003", # 예: 청년, 중장년
+    "orderBy": "date",
+    "trgterIndvdlArray": "040"
 }
