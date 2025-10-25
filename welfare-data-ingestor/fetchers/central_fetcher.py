@@ -4,6 +4,7 @@ import json
 import ssl
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET  # [수정] XML 파서를 임포트
 from typing import List, Optional, Dict, Any
 
 from fetchers.base_fetcher import BaseWelfareFetcher
@@ -13,11 +14,10 @@ from config import CENTRAL_API_CONSTANT_PARAMS, CENTRAL_API_KEY
 
 logger = logging.getLogger()
 
-# ===== 헬퍼 함수 (중앙부처 API - JSON 처리용) =====
+# ===== 헬퍼 함수 (XML 처리용) =====
 
-def _http_get_json(url: str, timeout: int = 20) -> bytes:
-    """주어진 URL로 HTTP GET 요청을 보내고 응답을 bytes로 반환합니다."""
-    # Local Fetcher와 동일한 SSL 컨텍스트 사용
+def _http_get_xml(url: str, timeout: int = 20) -> bytes:
+    """[수정] XML을 받기 위한 HTTP GET 요청"""
     ctx = ssl.create_default_context()
     try:
         ctx.set_ciphers("DEFAULT:@SECLEVEL=1")
@@ -26,52 +26,59 @@ def _http_get_json(url: str, timeout: int = 20) -> bytes:
     except Exception:
         pass
 
-    # Accept 헤더를 application/json으로 변경
-    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
+    # [수정] Accept 헤더를 application/xml로 변경
+    req = urllib.request.Request(url, headers={"Accept": "application/xml", "User-Agent": "Mozilla/5.0"})
     opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
 
-    logger.info(f"Central API 요청: {url}")
+    logger.info(f"Central API (XML) 요청: {url}")
     with opener.open(req, timeout=timeout) as resp:
         return resp.read()
 
-def _parse_json_to_items(json_bytes: bytes) -> List[Dict[str, Any]]:
-    """JSON 바이트 데이터를 파싱하여 서비스 아이템(dict) 리스트를 반환합니다."""
+def _parse_xml_to_items_central(xml_bytes: bytes) -> List[Dict[str, Any]]:
+    """[신규] 중앙부처 API의 XML을 파싱하는 함수"""
     try:
-        data = json.loads(json_bytes.decode('utf-8'))
+        root = ET.fromstring(xml_bytes)
 
-        # 응답 구조(wantedList)에 따라 파싱
-        wanted_list = data.get('wantedList', {})
-        if not wanted_list:
-            logger.warning("Central API 응답에 'wantedList' 키가 없습니다.")
+        # 중앙부처 API는 'wantedList' 요소로 감싸져 있음
+        wanted_list_element = root.find(".//wantedList")
+        if wanted_list_element is None:
+            # 'wantedList'가 없는 경우, 오류 응답인지 확인
+            result_code = root.findtext(".//resultCode")
+            if result_code is not None and result_code not in ("00", "0"): # 00 또는 0 (지자체 호환)
+                 logger.warning(f"Central API (XML) 비정상 응답: Code={result_code}, Msg={root.findtext('.//resultMessage')}")
+            else:
+                 logger.warning("Central API (XML) 응답에 'wantedList' 요소가 없습니다.")
             return []
 
-        result_code = wanted_list.get('resultCode')
-        # API 문서상 성공 코드가 '00'일 수 있습니다. (지자체는 '00' 또는 '0')
+        # 'wantedList' 내부의 resultCode 확인 (성공 코드가 '00'이어야 함)
+        result_code = wanted_list_element.findtext(".//resultCode")
         if result_code != "00":
-            logger.warning(f"Central API 비정상 응답: Code={result_code}, Msg={wanted_list.get('resultMessage')}")
+            logger.warning(f"Central API (XML) 비정상 응답: Code={result_code}, Msg={wanted_list_element.findtext('.//resultMessage')}")
             return []
 
-        return wanted_list.get('servList', [])
+        items = []
+        # 'wantedList' 내부의 'servList'들을 찾음
+        for serv_element in wanted_list_element.findall(".//servList"):
+            item = {child.tag: (child.text or "").strip() for child in list(serv_element)}
+            items.append(item)
+        return items
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Central API JSON 파싱 오류: {e}\nJSON Data (first 500 bytes): {json_bytes[:500]}")
+    except ET.ParseError as e:
+        logger.error(f"Central API XML 파싱 오류: {e}\nXML Data (first 500 bytes): {xml_bytes[:500]}")
         return []
     except Exception as e:
-        logger.error(f"Central API JSON 처리 중 알 수 없는 오류: {e}")
+        logger.error(f"Central API XML 처리 중 알 수 없는 오류: {e}")
         return []
 
 # ===== 중앙부처 Fetcher 클래스 =====
 
 class CentralWelfareFetcher(BaseWelfareFetcher):
-    """중앙부처 복지 서비스(JSON) API 연동을 담당하는 Fetcher"""
+    """중앙부처 복지 서비스(XML) API 연동을 담당하는 Fetcher"""
 
     def __init__(self, api_endpoint: str, service_key: str, rows_per_page: int):
         """
         중앙부처 API Fetcher를 초기화합니다.
-
-        :param api_endpoint: 중앙부처 API 엔드포인트 URL
-        :param service_key: 중앙부처 API 서비스 키
-        :param rows_per_page: 페이지 당 요청할 행 수
+        (이 로직은 변경 없음)
         """
         self.api_endpoint = api_endpoint
         self.service_key = service_key
@@ -87,8 +94,10 @@ class CentralWelfareFetcher(BaseWelfareFetcher):
         logger.info(f"CentralWelfareFetcher 초기화 완료 (Endpoint: {api_endpoint})")
 
     def _map_to_dto(self, item: Dict[str, Any]) -> CommonServiceDTO:
-        """JSON API 결과(dict)를 CommonServiceDTO로 변환(어댑터 로직)"""
-
+        """
+        파싱된 딕셔너리(item)를 CommonServiceDTO로 변환합니다.
+        (이 로직은 변경 없음)
+        """
         def _format_datetime(dt_string: Optional[str]) -> Optional[str]:
             """'YYYY-MM-DD HH:MM:SS' -> 'YYYY-MM-DD'"""
             if dt_string and ' ' in dt_string:
@@ -116,31 +125,21 @@ class CentralWelfareFetcher(BaseWelfareFetcher):
             service_name=item.get('servNm'),
             service_summary=item.get('servDgst'),
             detail_link=item.get('servDtlLink'),
-
-            # 중앙부처 API 필드 매핑
-            # jurMnofNm(소관부처명), jurOrgNm(소관조직명) 중 더 적절한 값 사용
             department_name=item.get('jurMnofNm') or item.get('jurOrgNm'),
-            province=None,         # 중앙부처는 지역 정보 없음
+            province=None,
             city_district=None,
-
-            # 배열 필드 매핑
             target_audience=_split_text(item.get('trgterIndvdlArray')),
             life_cycle=_split_text(item.get('lifeArray')),
-            interest_theme=_split_text(item.get('intrsThemaArray')),
-
-            # 기타 필드
+            interest_theme=_split_text(item.get('intrsThemaNmArray')),
             support_cycle=item.get('sprtCycNm'),
             support_type=item.get('srvPvsnNm'),
-            # API 응답(onapPsbltYn)을 기반으로 변환
             application_method=_map_application_method(item.get('onapPsbltYn')),
-
-            # 날짜 변환 (svcfrstRegTs: 서비스등록일)
             last_modified_date=_format_datetime(item.get('svcfrstRegTs'))
         )
 
     def fetch_services_by_page(self, page_num: int, event_params: Optional[dict] = None) -> List[CommonServiceDTO]:
         """
-        중앙부처 API의 특정 페이지를 조회하여 CommonServiceDTO 리스트로 반환합니다.
+        중앙부처 API의 XML을 조회하여 DTO 리스트로 반환합니다.
         """
         params = self.base_params.copy()
         params["pageNo"] = str(page_num)
@@ -149,9 +148,8 @@ class CentralWelfareFetcher(BaseWelfareFetcher):
             known_params = {
                 "searchWrd", "lifeArray", "trgterIndvdlArray",
                 "intrsThemaArray", "age", "onapPsbltYn", "orderBy",
-                "srchKeyCode" # (event에서 기본값 '003'을 덮어쓸 수 있도록 허용)
+                "srchKeyCode"
             }
-
             for k, v in event_params.items():
                 if k in known_params and v not in (None, ""):
                     logger.info(f"Event 파라미터 적용 (Central): {k}={v}")
@@ -161,21 +159,18 @@ class CentralWelfareFetcher(BaseWelfareFetcher):
             query_string = urllib.parse.urlencode(params)
             url = f"{self.api_endpoint}?{query_string}"
 
-            # 1. API 호출 (Bytes)
-            json_body = _http_get_json(url)
+            xml_body = _http_get_xml(url)
 
-            # 2. JSON 파싱 (List[dict])
-            raw_items = _parse_json_to_items(json_body)
+            raw_items = _parse_xml_to_items_central(xml_body)
             if not raw_items:
                 return []
 
-            # 3. DTO로 변환 (List[CommonServiceDTO])
             dto_list = []
             for item in raw_items:
                 if item.get('servId'): # 서비스 ID가 있는 유효한 항목만 DTO로 변환
                     dto_list.append(self._map_to_dto(item))
 
-            logger.info(f"Central API 페이지 {page_num} 조회 완료 (DTO {len(dto_list)}개 변환)")
+            logger.info(f"Central API (XML) 페이지 {page_num} 조회 완료 (DTO {len(dto_list)}개 변환)")
             return dto_list
 
         except urllib.error.URLError as e:
