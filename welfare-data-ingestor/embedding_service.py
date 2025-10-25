@@ -2,7 +2,7 @@
 import json
 import logging
 from botocore.exceptions import ClientError
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 try:
     from common_dto import CommonServiceDTO
