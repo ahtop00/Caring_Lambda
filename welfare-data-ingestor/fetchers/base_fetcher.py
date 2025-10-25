@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 from common_dto import CommonServiceDTO
 
-class BaseWlfareFetcher(ABC):
+class BaseWelfareFetcher(ABC):
     """
     모든 Fetcher가 따라야 하는 추상 기본 클래스(인터페이스)
     """
