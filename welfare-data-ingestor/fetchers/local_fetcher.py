@@ -126,12 +126,21 @@ class LocalWelfareFetcher(BaseWelfareFetcher):
         params = self.base_params.copy()
         params["pageNo"] = str(page_num)
 
-        # 람다 실행 시 동적으로 받은 파라미터(event)가 있다면 덮어쓰기
+        # [수정] 람다 event 파라미터 중 API가 아는 것만 선별하여 전달
         if event_params:
+            # 지자체 API가 동적으로 받을 수 있는 파라미터 목록
+            known_params = {
+                "trgterIndvdlArray", # 대상 (기본값 040)
+                "srchKeyCode",       # 검색조건 (기본값 003)
+                "arrgOrd",           # 정렬 (기본값 001)
+                "searchWrd",         # 검색어
+                "lifeArray",         # 생애주기
+                "intrsThemaArray",   # 관심주제
+            }
+
             for k, v in event_params.items():
-                # 이 Fetcher와 관련 없는 파라미터는 무시할 수 있지만,
-                # 일단 event에 들어온 모든 값을 API 파라미터로 시도합니다.
-                if v not in (None, ""):
+                if k in known_params and v not in (None, ""):
+                    logger.info(f"Event 파라미터 적용 (Local): {k}={v}")
                     params[k] = str(v)
 
         try:

@@ -126,7 +126,7 @@ class CentralWelfareFetcher(BaseWelfareFetcher):
             # 배열 필드 매핑
             target_audience=_split_text(item.get('trgterIndvdlArray')),
             life_cycle=_split_text(item.get('lifeArray')),
-            interest_theme=_split_text(item.get('intrsThemaNmArray')),
+            interest_theme=_split_text(item.get('intrsThemaArray')),
 
             # 기타 필드
             support_cycle=item.get('sprtCycNm'),
@@ -145,11 +145,16 @@ class CentralWelfareFetcher(BaseWelfareFetcher):
         params = self.base_params.copy()
         params["pageNo"] = str(page_num)
 
-        # 람다 실행 시 동적으로 받은 파라미터(event)가 있다면 덮어쓰기
         if event_params:
+            known_params = {
+                "searchWrd", "lifeArray", "trgterIndvdlArray",
+                "intrsThemaArray", "age", "onapPsbltYn", "orderBy",
+                "srchKeyCode" # (event에서 기본값 '003'을 덮어쓸 수 있도록 허용)
+            }
+
             for k, v in event_params.items():
-                if v not in (None, ""):
-                    # 'searchWrd'나 'lifeArray' 등이 event로 들어올 수 있음
+                if k in known_params and v not in (None, ""):
+                    logger.info(f"Event 파라미터 적용 (Central): {k}={v}")
                     params[k] = str(v)
 
         try:
