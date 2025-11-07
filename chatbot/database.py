@@ -8,18 +8,22 @@ logger = logging.getLogger()
 
 def search_welfare_services(embedding: list[float], locations: list[str] | None) -> list:
     """임베딩과 지역명으로 복지 서비스를 검색하고 score를 반환합니다."""
+
     sql_params = []
     where_clauses = []
+
+    sql_params.append(json.dumps(embedding))
+
     if locations:
         loc_conditions = " OR ".join(["(province = %s OR city_district = %s)"] * len(locations))
         where_clauses.append(f"({loc_conditions})")
+
+        # 2. 이후 %s는 지역명입니다.
         for loc in locations:
             sql_params.extend([loc, loc])
 
     sql_where = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-    sql_params.append(json.dumps(embedding))
 
-    # [수정] (embedding <=> ...) AS score 추가
     sql = f"""
         SELECT 
             (embedding <=> CAST(%s AS VECTOR(1024))) AS score,
@@ -38,8 +42,8 @@ def search_welfare_services(embedding: list[float], locations: list[str] | None)
                 password=config.db_password
         ) as conn:
             with conn.cursor() as cur:
-                # [수정] embedding이 %s에 두 번 바인딩됨
-                cur.execute(sql, (sql_params[-1], *sql_params))
+                # [수정] 순서대로 생성된 sql_params 리스트를 튜플로 변환하여 전달
+                cur.execute(sql, tuple(sql_params))
                 results = cur.fetchall()
         return results
     except psycopg2.Error as e:
@@ -47,9 +51,10 @@ def search_welfare_services(embedding: list[float], locations: list[str] | None)
         raise
 
 def search_employment_jobs(embedding: list[float]) -> list:
-    """임베딩으로 구인 정보를 검색하고 score를 반환합니다."""
+    """
+    임베딩으로 구인 정보를 검색하고 score를 반환합니다.
+    """
 
-    # [수정] (embedding <=> ...) AS score 추가 및 컬럼 순서 변경
     sql = """
         SELECT 
             (embedding <=> CAST(%s AS VECTOR(1024))) AS score,
