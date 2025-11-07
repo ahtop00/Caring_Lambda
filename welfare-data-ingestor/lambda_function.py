@@ -1,4 +1,3 @@
-# lambda_function.py
 # -*- coding: utf-8 -*-
 import json
 import logging
@@ -8,26 +7,22 @@ from app import config
 from app.factory import get_dependencies, get_sources_to_run
 from app.processor import IngestProcessor
 from app.service.embedding_service import EmbeddingService
-from app.service.notification_service import NotificationService
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # --- 전역 모듈 초기화 (Boto3 클라이언트, 공통 서비스) ---
-# (Warm Start 시 재사용)
 try:
     bedrock_runtime_client = boto3.client(service_name='bedrock-runtime')
     sqs_client = boto3.client(service_name='sqs')
 
+    # 공통 서비스 (모든 Processor가 공유)
     embedder = EmbeddingService(
         bedrock_runtime=bedrock_runtime_client,
         model_id=config.BEDROCK_MODEL_ID
     )
-    publisher = NotificationService(
-        sqs_client=sqs_client,
-        queue_url=config.SQS_QUEUE_URL
-    )
-    logger.info("공통 서비스 (Embedder, Publisher) 초기화 완료.")
+
+    logger.info("공통 서비스 (Embedder, Boto3 Clients) 초기화 완료.")
 
 except Exception as e:
     logger.error(f"FATAL: 전역 모듈 초기화 실패: {e}")
@@ -40,7 +35,6 @@ def handler(event, context):
     """
     logger.info(f"이벤트 수신: {event}")
 
-    # 1. 실행할 소스 결정 (라우팅)
     try:
         sources = get_sources_to_run(event)
     except ValueError as e:
@@ -49,16 +43,17 @@ def handler(event, context):
 
     total_inserted_count = 0
 
-    # 소스별로 루프 실행
     for source in sources:
-        repo = None # [중요] repo는 소스마다 다를 수 있으므로 루프 내에서 생성/종료
+        repo = None
         try:
-            # Factory에서 의존성(Fetcher, Repo, Config) 가져오기
             logger.info(f"Source '{source}'에 대한 의존성 주입 시작...")
-            deps = get_dependencies(source, config.DB_CONFIG)
+
+            # Factory에 sqs_client 주입
+            deps = get_dependencies(source, config.DB_CONFIG, sqs_client)
 
             repo = deps["repository"]
             fetcher = deps["fetcher"]
+            publisher = deps["publisher"]
             page_config = deps["page_config"]
 
             # Processor 생성 (의존성 주입)
@@ -75,11 +70,9 @@ def handler(event, context):
 
         except Exception as e:
             logger.error(f"Source '{source}' 처리 중 핸들러 레벨 오류: {e}", exc_info=True)
-            if repo: repo.rollback() # Processor에서 놓친 오류가 있더라도 롤백
-            # (오류가 나도 다음 source는 계속 진행)
+            if repo: repo.rollback()
 
         finally:
-            # 한 소스의 작업이 끝나면 반드시 DB 연결 종료
             if repo: repo.close()
             logger.info(f"Source '{source}' 작업 완료. DB 연결 종료.")
 

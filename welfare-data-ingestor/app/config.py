@@ -35,6 +35,13 @@ CENTRAL_ROWS_PER_PAGE = get_int_env_variable("CENTRAL_ROWS_PER_PAGE", 100)
 CENTRAL_PAGE_LIMIT    = get_int_env_variable("CENTRAL_PAGE_LIMIT", 5)
 CENTRAL_START_PAGE    = get_int_env_variable("CENTRAL_START_PAGE", 1)
 
+# ===== 장애인 구인정보 API 변수 =====
+EMPLOYMENT_API_ENDPOINT = get_env_variable("EMPLOYMENT_API_ENDPOINT")
+EMPLOYMENT_API_KEY = get_env_variable("EMPLOYMENT_API_KEY")
+EMPLOYMENT_ROWS_PER_PAGE = get_int_env_variable("EMPLOYMENT_ROWS_PER_PAGE", 30)
+EMPLOYMENT_PAGE_LIMIT = get_int_env_variable("EMPLOYMENT_PAGE_LIMIT", 5)
+EMPLOYMENT_START_PAGE = get_int_env_variable("EMPLOYMENT_START_PAGE", 1)
+
 
 # ===== Vector DB Ingestor용 변수 =====
 DB_CONFIG = {
@@ -47,6 +54,19 @@ DB_CONFIG = {
 # ===== Bedrock용 변수 =====
 BEDROCK_MODEL_ID = get_env_variable("BEDROCK_MODEL_ID", "amazon.titan-embed-text-v2:0")
 
+# ===== SQS Queue URL 변수=====
+# 복지 정책 Ingestor에서 사용할 SQS
+WELFARE_SQS_QUEUE_URL = get_env_variable(
+    "WELFARE_SQS_QUEUE_URL",
+    default="https://sqs.ap-northeast-2.amazonaws.com/084056488795/policy-sqs"
+)
+
+#  구인 정보 Ingestor가 사용하게 될 SQS
+EMPLOYMENT_SQS_QUEUE_URL = get_env_variable(
+    "EMPLOYMENT_SQS_QUEUE_URL",
+    default="https://sqs.ap-northeast-2.amazonaws.com/084056488795/jobOpening-sqs"
+)
+
 # ===== 지자체 API 상수 =====
 API_CONSTANT_PARAMS = {
     "trgterIndvdlArray": "040", # 장애인
@@ -54,7 +74,7 @@ API_CONSTANT_PARAMS = {
     "arrgOrd": "001"            # 최종수정일
 }
 
-# 5-2. 중앙부처 API 고정 파라미터
+# ==== 중앙부처 API 고정 파라미터 ====
 CENTRAL_API_CONSTANT_PARAMS = {
     "srchKeyCode": "003", # 제목+내용
     "orderBy": "date",
