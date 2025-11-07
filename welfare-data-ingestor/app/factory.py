@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 from app import config
-from app.fetchers.local_fetcher import LocalWelfareFetcher
-from app.fetchers.central_fetcher import CentralWelfareFetcher
+from app.fetcher.local_fetcher import LocalWelfareFetcher
+from app.fetcher.central_fetcher import CentralWelfareFetcher
+from app.fetcher.employment_fetcher import EmploymentFetcher
 from app.repository.welfare_repository import WelfareRepository
 from app.service.notification_service import NotificationService
-from app.fetchers.employment_fetcher import EmploymentFetcher
 from app.repository.employment_repository import EmploymentRepository
 
 

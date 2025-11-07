@@ -6,9 +6,9 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from typing import List, Optional, Dict, Any
 
-from fetchers.base_fetcher import BaseWelfareFetcher
-from common_dto import CommonServiceDTO
-from config import API_CONSTANT_PARAMS # 지자체용 파라미터
+from fetcher.base_fetcher import BaseWelfareFetcher
+from app.dto.common_dto import CommonServiceDTO
+from app.config import API_CONSTANT_PARAMS # 지자체용 파라미터
 
 logger = logging.getLogger()
 

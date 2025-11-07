@@ -7,7 +7,7 @@ import datetime # 날짜 파싱을 위해 임포트
 
 try:
     from app.repository.base_repository import BaseRepository
-    from app.employment_dto import JobOpeningDTO
+    from app.dto.employment_dto import JobOpeningDTO
 except ImportError:
     from base_repository import BaseRepository
     from ..employment_dto import JobOpeningDTO
