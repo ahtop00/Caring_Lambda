@@ -50,27 +50,31 @@ def _parse_xml_to_items_central(xml_bytes: bytes) -> List[Dict[str, Any]]:
     try:
         root = ET.fromstring(xml_bytes)
 
-        # 중앙부처 API는 'wantedList' 요소로 감싸져 있음
-        wanted_list_element = root.find(".//wantedList")
+        # 네임스페이스 무시 와일드카드('{*}') 사용
+        wanted_list_element = root.find(".//{*}wantedList")
         if wanted_list_element is None:
             # 'wantedList'가 없는 경우, 오류 응답인지 확인
             result_code = root.findtext(".//resultCode")
             if result_code is not None and result_code not in ("00", "0"): # 00 또는 0 (지자체 호환)
-                 logger.warning(f"Central API (XML) 비정상 응답: Code={result_code}, Msg={root.findtext('.//resultMessage')}")
+                logger.warning(f"Central API (XML) 비정상 응답: Code={result_code}, Msg={root.findtext('.//resultMessage')}")
             else:
-                 logger.warning("Central API (XML) 응답에 'wantedList' 요소가 없습니다.")
+                logger.warning("Central API (XML) 응답에 'wantedList' 요소가 없습니다.")
             return []
 
-        # 'wantedList' 내부의 resultCode 확인 (성공 코드가 '00'이어야 함)
+        # 'wantedList' 내부의 resultCode 확인 (성공 코드가 '00' 또는 '0'이어야 함)
         result_code = wanted_list_element.findtext(".//resultCode")
-        if result_code != "00":
+        if result_code not in ("00", "0"): # [수정] '0'도 성공으로 간주
             logger.warning(f"Central API (XML) 비정상 응답: Code={result_code}, Msg={wanted_list_element.findtext('.//resultMessage')}")
             return []
 
         items = []
-        # 'wantedList' 내부의 'servList'들을 찾음
-        for serv_element in wanted_list_element.findall(".//servList"):
-            item = {child.tag: (child.text or "").strip() for child in list(serv_element)}
+        # 네임스페이스 무시 와일드카드('{*}') 사용
+        for serv_element in wanted_list_element.findall(".//{*}servList"):
+            item = {}
+            for child in list(serv_element):
+                # [수정] 네임스페이스가 붙은 태그({http://...}servId)에서 순수 태그 이름(servId)만 추출
+                tag_name = child.tag.split('}')[-1]
+                item[tag_name] = (child.text or "").strip()
             items.append(item)
         return items
 
@@ -114,7 +118,7 @@ class CentralWelfareFetcher(BaseWelfareFetcher):
             if dt_string and ' ' in dt_string:
                 return dt_string.split(' ')[0]
             elif dt_string and len(dt_string) == 8: # YYYYMMDD 형식일 경우
-                 return f"{dt_string[:4]}-{dt_string[4:6]}-{dt_string[6:]}"
+                return f"{dt_string[:4]}-{dt_string[4:6]}-{dt_string[6:]}"
             return dt_string # 형식이 다르거나 날짜만 있을 경우 그대로 반환
 
         def _split_text(text: Optional[str]) -> List[str]:
