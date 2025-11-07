@@ -89,7 +89,7 @@ class CentralWelfareFetcher(BaseWelfareFetcher):
         self.base_params["serviceKey"] = self.service_key
         self.base_params["numOfRows"] = str(self.rows_per_page)
         # API 명세서(이미지)에서 필수값(callTp) 확인
-        self.base_params["callTp"] = "L" # 'L': 목록조회
+        # self.base_params["callTp"] = "L" # 'L': 목록조회
 
         logger.info(f"CentralWelfareFetcher 초기화 완료 (Endpoint: {api_endpoint})")
 
