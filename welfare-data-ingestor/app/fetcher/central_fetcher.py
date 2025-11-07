@@ -36,6 +36,17 @@ def _http_get_xml(url: str, timeout: int = 20) -> bytes:
 
 def _parse_xml_to_items_central(xml_bytes: bytes) -> List[Dict[str, Any]]:
     """[신규] 중앙부처 API의 XML을 파싱하는 함수"""
+
+    # ---------
+    try:
+        # 바이트를 UTF-8 문자열로 디코딩하여 로그 출력
+        xml_content_str = xml_bytes.decode('utf-8')
+        logger.info(f"Central API (XML) 수신 내용:\n{xml_content_str}")
+    except Exception as log_e:
+        # 디코딩 실패 또는 기타 오류 시, 원본 바이트 일부만 로깅
+        logger.warning(f"XML 응답 로깅 중 오류 발생: {log_e}. 원본 (앞 1000 bytes): {xml_bytes[:1000]}")
+    # ------------------------------------
+
     try:
         root = ET.fromstring(xml_bytes)
 
@@ -89,7 +100,7 @@ class CentralWelfareFetcher(BaseWelfareFetcher):
         self.base_params["serviceKey"] = self.service_key
         self.base_params["numOfRows"] = str(self.rows_per_page)
         # API 명세서(이미지)에서 필수값(callTp) 확인
-        # self.base_params["callTp"] = "L" # 'L': 목록조회
+        self.base_params["callTp"] = "D"
 
         logger.info(f"CentralWelfareFetcher 초기화 완료 (Endpoint: {api_endpoint})")
 
