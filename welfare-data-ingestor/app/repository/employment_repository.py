@@ -26,30 +26,33 @@ class EmploymentRepository(BaseRepository):
             job_type, salary, salary_type, location, 
             required_skills, required_career, required_education,
             last_modified_date, detail_link,
-            term_date_start, term_date_end
+            term_date_start, term_date_end,
+            term_date_str 
         )
         VALUES %s;
     """
 
-    # [신규] 만료된 공고 삭제 쿼리
     SQL_DELETE_EXPIRED_JOBS = """
         DELETE FROM employment_jobs WHERE term_date_end < CURRENT_DATE;
     """
+
+    SQL_FIND_EXISTING_KEYS = """
+        SELECT company_name, job_title, term_date_str, salary FROM employment_jobs;
+    """
+
 
     def __init__(self, db_config: dict):
         super().__init__(db_config)
 
     def get_existing_ids(self, id_list: List[str]) -> Set[str]:
         """
-        [수정]
-        요구사항(겹치는 게 있을 수 있음)에 따라, 중복 검사를 수행하지 않고
-        항상 모든 데이터를 신규로 취급하여 삽입합니다.
+        Delta(차이) 업데이트를 위해 중복 검사를 수행하지 않습니다.
+        (중복 검사는 insert_services_batch에서 복합 키로 수행)
         """
         return set()
 
     def _parse_term_date(self, term_date_str: Optional[str]) -> Tuple[Optional[datetime.date], Optional[datetime.date]]:
         """
-        [신규]
         "YYYY-MM-DD~YYYY-MM-DD" 형식의 문자열을 파싱하여
         (start_date, end_date) 튜플로 반환합니다.
         """
@@ -65,7 +68,7 @@ class EmploymentRepository(BaseRepository):
             return None, None
 
     def _build_params_list(self, data_list: List[Tuple[JobOpeningDTO, List[float]]]) -> List[tuple]:
-        """[수정] DTO를 DB 튜플 리스트로 변환 (termDate 파싱 포함)"""
+        """DTO를 DB 튜플 리스트로 변환 (termDate 파싱 포함)"""
         params_list = []
         for dto, embedding in data_list:
 
@@ -87,19 +90,60 @@ class EmploymentRepository(BaseRepository):
                 dto.required_education,
                 dto.last_modified_date,
                 dto.detail_link,
-                term_start, # [신규]
-                term_end    # [신규]
+                term_start,
+                term_end,
+                dto.term_date_str
             )
             params_list.append(params)
         return params_list
 
-    def insert_services_batch(self, data_list: List[Tuple[JobOpeningDTO, List[float]]]) -> int:
-        """[수정] 구인 정보 DTO 리스트를 DB에 일괄 삽입"""
+    def _get_existing_keys_set(self) -> Set[str]:
+        """[신규] 현재 DB에 저장된 모든 공고의 복합 키 Set을 반환"""
+        try:
+            self.cur.execute(self.SQL_FIND_EXISTING_KEYS)
+            existing_keys = set()
+            for row in self.cur.fetchall():
+                # DTO의 get_composite_key와 동일한 로직으로 키 생성
+                # DB 순서: company_name(0), job_title(1), term_date_str(2), salary(3)
+                key = f"{row[0] or ''}|{row[1] or ''}|{row[2] or ''}|{row[3] or ''}"
+                existing_keys.add(key)
+            logger.info(f"[Employment] DB에서 {len(existing_keys)}개의 기존 복합 키 조회 완료.")
+            return existing_keys
+        except psycopg2.Error as e:
+            logger.error(f"[Employment] 기존 복합 키 조회 중 DB 오류: {e}")
+            self.rollback() # 조회 실패 시 트랜잭션 롤백
+            raise e # 상위로 오류 전파
+
+    def insert_services_batch(self, data_list: List[Tuple[JobOpeningDTO, List[float]]]) -> List[JobOpeningDTO]:
+        """구인 정보 DTO 리스트를 DB에 일괄 삽입 (Delta 로직)"""
         if not data_list:
-            return 0
+            return []
 
         try:
-            params_list = self._build_params_list(data_list)
+            # 1. DB의 기존 복합 키 조회
+            existing_keys = self._get_existing_keys_set()
+        except psycopg2.Error:
+            # _get_existing_keys_set에서 이미 롤백하고 오류 로깅함
+            return [] # 빈 리스트 반환
+
+        new_data_list_with_embeddings = [] # (dto, embedding)
+        new_dtos_for_publish = []        # dto
+
+        # 2. API DTOs와 DB DTOs 비교
+        for dto, embedding in data_list:
+            key = dto.get_composite_key()
+            if key not in existing_keys:
+                new_data_list_with_embeddings.append((dto, embedding))
+                new_dtos_for_publish.append(dto)
+
+        if not new_data_list_with_embeddings:
+            logger.info("[Employment] 신규로 삽입할 Job이 없습니다 (모두 중복).")
+            return []
+        # ---------------------------
+
+        try:
+            # 신규 데이터만 DB에 삽입
+            params_list = self._build_params_list(new_data_list_with_embeddings)
 
             execute_values(
                 self.cur,
@@ -110,32 +154,28 @@ class EmploymentRepository(BaseRepository):
 
             inserted_count = len(params_list)
             logger.info(f"[Employment] {inserted_count}개의 신규 Job을 DB에 일괄 삽입했습니다.")
-            return inserted_count
+
+            # 4. 삽입된 '신규' DTO 리스트를 반환 (SQS 발행용)
+            return new_dtos_for_publish
         except psycopg2.Error as e:
-            # (중요) 만약 중복 삽입을 막기 위해 UNIQUE 제약조건을 사용했다면,
-            # 여기서 e.pgcode == '23505' (unique_violation)를 확인하고
-            # 오류 로깅 대신 무시(pass)하도록 처리할 수 있습니다.
             logger.error(f"[Employment] DB 일괄 INSERT 중 오류: {e}")
             self.rollback()
-            return 0
+            return []
         except Exception as e:
             logger.error(f"[Employment] DB 파라미터 준비 중 오류: {e}")
             self.rollback()
-            return 0
+            return []
 
     def delete_expired_jobs(self) -> int:
         """
-        [신규]
         term_date_end가 오늘(CURRENT_DATE)보다 이전인 모든 공고를 삭제합니다.
-        Processor가 작업 시작 전에 호출합니다.
+        (TRUNCATE 대신 Delta 유지를 위해 이 로직 사용)
         """
         try:
             self.cur.execute(self.SQL_DELETE_EXPIRED_JOBS)
             deleted_count = self.cur.rowcount
             if deleted_count > 0:
                 logger.info(f"[Employment] 만료된 공고 {deleted_count}개를 삭제했습니다.")
-            # (중요) 이 작업은 Processor의 메인 트랜잭션에 포함되므로
-            # 여기서 커밋하지 않고 Processor가 커밋하도록 둡니다.
             return deleted_count
         except psycopg2.Error as e:
             logger.error(f"[Employment] 만료된 공고 삭제 중 DB 오류: {e}")
