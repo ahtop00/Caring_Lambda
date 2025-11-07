@@ -50,31 +50,33 @@ def _parse_xml_to_items_central(xml_bytes: bytes) -> List[Dict[str, Any]]:
     try:
         root = ET.fromstring(xml_bytes)
 
-        # 네임스페이스 무시 와일드카드('{*}') 사용
-        wanted_list_element = root.find(".//{*}wantedList")
+        # root.find()로 자신을 찾지 않고, root의 태그가 'wantedList'인지 직접 확인합니다.
+        if root.tag == 'wantedList':
+            wanted_list_element = root
+        else:
+            # 예외: 루트가 wantedList가 아닌 경우 (예: <error> 태그 등)
+            wanted_list_element = None
+
         if wanted_list_element is None:
             # 'wantedList'가 없는 경우, 오류 응답인지 확인
             result_code = root.findtext(".//resultCode")
             if result_code is not None and result_code not in ("00", "0"): # 00 또는 0 (지자체 호환)
                 logger.warning(f"Central API (XML) 비정상 응답: Code={result_code}, Msg={root.findtext('.//resultMessage')}")
             else:
-                logger.warning("Central API (XML) 응답에 'wantedList' 요소가 없습니다.")
+                logger.warning(f"Central API (XML) 응답에 'wantedList' 요소가 없습니다. Root tag: {root.tag}")
             return []
 
         # 'wantedList' 내부의 resultCode 확인 (성공 코드가 '00' 또는 '0'이어야 함)
         result_code = wanted_list_element.findtext(".//resultCode")
-        if result_code not in ("00", "0"): # [수정] '0'도 성공으로 간주
+
+        if result_code not in ("00", "0"):
             logger.warning(f"Central API (XML) 비정상 응답: Code={result_code}, Msg={wanted_list_element.findtext('.//resultMessage')}")
             return []
 
         items = []
-        # 네임스페이스 무시 와일드카드('{*}') 사용
-        for serv_element in wanted_list_element.findall(".//{*}servList"):
-            item = {}
-            for child in list(serv_element):
-                # [수정] 네임스페이스가 붙은 태그({http://...}servId)에서 순수 태그 이름(servId)만 추출
-                tag_name = child.tag.split('}')[-1]
-                item[tag_name] = (child.text or "").strip()
+        # 'wantedList' 내부의 'servList'들을 찾음
+        for serv_element in wanted_list_element.findall(".//servList"):
+            item = {child.tag: (child.text or "").strip() for child in list(serv_element)}
             items.append(item)
         return items
 
