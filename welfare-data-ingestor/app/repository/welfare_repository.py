@@ -8,7 +8,7 @@ from typing import List, Tuple, Set
 # app 패키지 내부의 모듈을 임포트
 try:
     from app.repository.base_repository import BaseRepository
-    from app.common_dto import CommonServiceDTO
+    from app.dto.common_dto import CommonServiceDTO
 except ImportError:
     # 로컬 테스트 등을 위한 예외 처리
     from base_repository import BaseRepository

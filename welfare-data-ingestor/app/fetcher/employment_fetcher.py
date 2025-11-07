@@ -6,8 +6,8 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from typing import List, Optional, Dict, Any
 
-from app.fetchers.base_fetcher import BaseWelfareFetcher
-from app.employment_dto import JobOpeningDTO # 신규 DTO 임포트
+from app.fetcher.base_fetcher import BaseWelfareFetcher
+from app.dto.employment_dto import JobOpeningDTO # 신규 DTO 임포트
 
 logger = logging.getLogger()
 

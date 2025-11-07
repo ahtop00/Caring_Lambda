@@ -5,7 +5,7 @@ from typing import List, Tuple
 from botocore.exceptions import ClientError
 
 # app 내부 모듈 임포트
-from app.fetchers.base_fetcher import BaseWelfareFetcher
+from app.fetcher.base_fetcher import BaseWelfareFetcher
 from app.repository.base_repository import BaseRepository
 from app.service.embedding_service import EmbeddingService
 from app.service.notification_service import NotificationService
