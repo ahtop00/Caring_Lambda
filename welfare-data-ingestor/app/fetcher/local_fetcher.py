@@ -6,7 +6,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from typing import List, Optional, Dict, Any
 
-from fetcher.base_fetcher import BaseWelfareFetcher
+from app.fetcher.base_fetcher import BaseWelfareFetcher
 from app.dto.common_dto import CommonServiceDTO
 from app.config import API_CONSTANT_PARAMS # 지자체용 파라미터
 

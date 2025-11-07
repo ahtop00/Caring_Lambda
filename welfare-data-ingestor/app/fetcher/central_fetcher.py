@@ -7,7 +7,7 @@ import urllib.request
 import xml.etree.ElementTree as ET  # [수정] XML 파서를 임포트
 from typing import List, Optional, Dict, Any
 
-from fetcher.base_fetcher import BaseWelfareFetcher
+from app.fetcher.base_fetcher import BaseWelfareFetcher
 from app.dto.common_dto import CommonServiceDTO
 from app.config import CENTRAL_API_CONSTANT_PARAMS, CENTRAL_API_KEY
 
