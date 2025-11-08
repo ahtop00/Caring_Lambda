@@ -3,5 +3,3 @@ anthropic
 psycopg2-binary
 boto3
 pydantic
-google-cloud-aiplatform
-google-auth
