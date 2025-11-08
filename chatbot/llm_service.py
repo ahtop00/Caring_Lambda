@@ -25,7 +25,7 @@ anthropic_client = anthropic.Anthropic(api_key=config.anthropic_api_key) if conf
 gemini_pro_model = None
 if vertexai and service_account:
     try:
-        gcp_ssm_name = config.gcp_ssm_name
+        gcp_ssm_name = config.gcp_ssm_param_name
         if not gcp_ssm_name:
         # 환경 변수가 설정되지 않았으면 Gemini를 초기화하지 않습니다.
             raise ValueError("GCP_SSM_PARAM_NAME 환경 변수가 설정되지 않았습니다.")
