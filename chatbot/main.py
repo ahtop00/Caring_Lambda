@@ -7,7 +7,9 @@ from domain.reframing_logic import execute_reframing
 app = FastAPI(
     title="Welfare Chatbot API",
     description="복지/구인 정보 검색 및 리프레이밍 챗봇 API",
-    version="1.0.0"
+    version="1.0.0",
+    openapi_prefix="/prod",
+    openapi_url="/openapi.json"
 )
 
 @app.post("/chatbot/query", response_model=SearchResponse)
