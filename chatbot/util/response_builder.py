@@ -1,16 +1,14 @@
 # chatbot/util/response_builder.py
-import json
-from typing import Dict, Any, List
+import re
+from typing import List, Optional, Tuple
 
-def build_response(status_code: int, body: Dict) -> Dict[str, Any]:
-    """API Gateway에 반환할 표준 응답을 생성합니다."""
-    return {
-        'statusCode': status_code,
-        'headers': {'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*'},
-        'body': json.dumps(body, ensure_ascii=False)
-    }
+def extract_locations(query: str) -> Optional[List[str]]:
+    """쿼리에서 지역명을 추출합니다."""
+    pattern = re.compile(r"(\S+[시군구도])(?:은|는|이|가|을|를|도|에|에서|의)?")
+    matches = pattern.findall(query)
+    return list(set(matches)) if matches else None
 
-def normalize_results(results: List, result_type: str) -> List[tuple[float, tuple]]:
+def normalize_results(results: List, result_type: str) -> List[Tuple[float, tuple]]:
     """DB 검색 결과를 표준 튜플 리스트로 변환합니다."""
     normalized_list = []
 
@@ -38,7 +36,7 @@ def normalize_results(results: List, result_type: str) -> List[tuple[float, tupl
 
     return normalized_list
 
-def rerank_results(results: List, locations: List[str] | None) -> List:
+def rerank_results(results: List, locations: Optional[List[str]]) -> List:
     """지역 기반 재순위화 로직"""
     if not locations or not results:
         return results[:3]
