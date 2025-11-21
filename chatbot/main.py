@@ -9,7 +9,8 @@ app = FastAPI(
     description="복지/구인 정보 검색 및 리프레이밍 챗봇 API",
     version="1.0.0",
     openapi_prefix="/prod",
-    openapi_url="/openapi.json"
+    docs_url="/chatbot/docs",
+    openapi_url="/chatbot/openapi.json"
 )
 
 @app.post("/chatbot/query", response_model=SearchResponse)
@@ -24,6 +25,6 @@ def search_endpoint(request: SearchRequest):
 def reframing_endpoint(request: ReframingRequest):
     return execute_reframing(request.user_input)
 
-@app.get("/health")
+@app.get("/chatbot/health")
 def health_check():
     return {"status": "ok"}
