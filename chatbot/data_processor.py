@@ -4,7 +4,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 def parse_request_body(event: Dict[str, Any]) -> Dict[str, Any]:
-    """이벤트 Body를 파싱하고 필수 값을 추출합니다."""
+    """이벤트 Body를 파싱하고 필수 값을 추출합니다. (검색용)"""
     body = json.loads(event.get('body', '{}'))
     user_info = body.get('query1', '제공된 정보 없음')
     user_chat = body.get('query2')
@@ -13,6 +13,20 @@ def parse_request_body(event: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("query2가 누락되었습니다.")
 
     return {"user_info": user_info, "user_chat": user_chat}
+
+def parse_reframing_body(event: Dict[str, Any]) -> str:
+    """리프레이밍 요청 Body에서 사용자 입력을 추출합니다."""
+    try:
+        body = json.loads(event.get('body', '{}'))
+        # 프론트엔드에서 보낼 JSON 키 이름을 'user_input'으로 가정
+        user_input = body.get('user_input')
+
+        if not user_input:
+            raise ValueError("요청 Body에 'user_input' 값이 누락되었습니다.")
+
+        return user_input
+    except json.JSONDecodeError:
+        raise ValueError("잘못된 JSON 형식입니다.")
 
 def extract_locations(query: str) -> Optional[List[str]]:
     """쿼리에서 지역명을 추출합니다."""
