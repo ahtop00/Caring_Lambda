@@ -3,6 +3,7 @@ import json
 import logging
 import re
 
+# 자체 모듈 임포트
 import database
 import llm_service
 import prompts
@@ -13,33 +14,46 @@ logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
     """
-    메인 핸들러: 경로(path)에 따라 검색 또는 리프레이밍 로직으로 분기합니다.
+    메인 핸들러: API Gateway 경로(path)에 따라 적절한 함수로 라우팅합니다.
     """
     logger.info(f"이벤트 수신: {event}")
 
-    # API Gateway로부터 전달된 path 확인
-    # (로컬 테스트나 직접 호출 시 path가 없을 수 있으므로 .get 사용)
+    # 1. Path와 Method 추출 (Proxy Integration 기준)
+    # 로컬 테스트나 직접 호출 시 path가 없을 수 있으므로 .get 사용
     path = event.get('path', '')
     http_method = event.get('httpMethod', '')
 
     try:
-        # (/chatbot/reframing - POST)
+        # [Case 1] 리프레이밍 요청 (/chatbot/reframing)
         if 'reframing' in path and http_method == 'POST':
+            logger.info("라우팅: 리프레이밍 요청 처리")
             return handle_reframing_request(event)
 
-        # 복지/구인 검색 요청 처리
-        return handle_search_request(event)
+        # [Case 2] 검색/질의 요청 (/chatbot/query)
+        # 이미지의 API 구조에 맞춰 '/query' 경로를 명시적으로 체크합니다.
+        elif ('query' in path or path == '/chatbot') and http_method == 'POST':
+            logger.info("라우팅: 검색(Query) 요청 처리")
+            return handle_search_request(event)
+
+        # [Case 3] 그 외 경로 (404 Not Found)
+        # 경로가 매칭되지 않으면 무조건 검색을 실행하는 대신 에러를 반환하여 디버깅을 돕습니다.
+        else:
+            logger.warning(f"라우팅 실패: 알 수 없는 경로 또는 메서드 ({path}, {http_method})")
+            return data_processor.build_response(404, {'error': 'Not Found: 알 수 없는 경로입니다.'})
 
     except Exception as e:
         logger.error(f"핸들러 실행 중 예측하지 못한 오류 발생: {e}", exc_info=True)
         return data_processor.build_response(500, {'error': '서버 내부 오류가 발생했습니다.'})
+
+
+# --- 하위 핸들러 함수 ---
 
 def handle_reframing_request(event):
     """
     리프레이밍(Reframing) 요청을 처리하는 핸들러
     """
     try:
-        # 1. 입력 파싱 (data_processor 업데이트 필요)
+        # 1. 입력 파싱 (data_processor에 parse_reframing_body가 있어야 함)
         user_input = data_processor.parse_reframing_body(event)
 
         # 2. 프롬프트 생성 (prompts/reframing.py 사용)
@@ -101,12 +115,9 @@ def handle_search_request(event):
 
         # 상위 3개만 추출 (RAG 컨텍스트)
         top_3_with_scores = sorted_results[:3]
-
-        # (name, summary, url, prov, city) 튜플의 리스트로 변환
         top_3_tuples = [item[1] for item in top_3_with_scores]
 
         # 결과 재순위화
-        # 벡터 점수 상위 3개 내에서 지역명으로 추가 재순위화
         final_results_tuples = data_processor.rerank_results(top_3_tuples, locations)
 
         if not final_results_tuples:
@@ -116,7 +127,7 @@ def handle_search_request(event):
         # LLM 프롬프트 생성
         context_str = data_processor.format_context_string(final_results_tuples)
 
-        # [변경] 패키지화된 프롬프트 함수 호출 (get_final_prompt -> get_search_prompt)
+        # [패키지 사용] prompts.get_search_prompt 호출
         final_prompt = prompts.get_search_prompt(context_str, user_info, user_chat)
 
         llm_response_str = llm_service.get_llm_response(final_prompt, use_bedrock=use_bedrock)
