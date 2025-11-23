@@ -79,11 +79,13 @@ class ChatRepository:
     def get_session_messages(self, session_id: str, limit: int, offset: int) -> tuple:
         """특정 세션의 대화 상세 조회 (페이징)"""
         count_sql = "SELECT COUNT(*) FROM cbt_logs WHERE session_id = %s"
+
+        # ORDER BY created_at ASC -> DESC
         data_sql = """
             SELECT user_input, bot_response, created_at 
             FROM cbt_logs
             WHERE session_id = %s
-            ORDER BY created_at ASC
+            ORDER BY created_at DESC
             LIMIT %s OFFSET %s
         """
         try:

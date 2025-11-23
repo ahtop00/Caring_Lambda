@@ -44,7 +44,11 @@ class ChatService:
             size = 20
             offset = (page - 1) * size
 
+            # DB에서 최신순(DESC)으로 limit만큼 가져옴
             rows, total_cnt = self.chat_repo.get_session_messages(session_id, size, offset)
+
+            if rows:
+                rows = rows[::-1]
 
             messages = []
             for r in rows:
