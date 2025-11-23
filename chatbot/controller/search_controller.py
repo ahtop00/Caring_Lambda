@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends
 from schema.search import SearchRequest, SearchResponse
 from domain.search_logic import SearchService, get_search_service
+from schema.common import COMMON_RESPONSES
 
 router = APIRouter(tags=["Welfare Search"])
 
@@ -9,7 +10,8 @@ router = APIRouter(tags=["Welfare Search"])
     "/chatbot/query",
     response_model=SearchResponse,
     summary="복지/구인 정보 검색",
-    description="사용자의 질문과 개인 정보(선택)를 입력받아, 관련된 복지 정책이나 채용 공고를 검색하고 답변을 생성합니다."
+    description="사용자의 질문과 개인 정보(선택)를 입력받아, 관련된 복지 정책이나 채용 공고를 검색하고 답변을 생성합니다.",
+    responses=COMMON_RESPONSES
 )
 def search_endpoint(
         request: SearchRequest,

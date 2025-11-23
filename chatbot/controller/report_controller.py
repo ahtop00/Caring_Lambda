@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends
 from schema.history import WeeklyReportRequest, WeeklyReportResponse
 from domain.report_logic import ReportService, get_report_service
+from schema.common import COMMON_RESPONSES
 
 router = APIRouter(tags=["Report"])
 
@@ -9,7 +10,8 @@ router = APIRouter(tags=["Report"])
     "/chatbot/report/weekly",
     response_model=WeeklyReportResponse,
     summary="주간 마음 소설 생성",
-    description="한 주간의 대화 기록을 분석하여 심리 분석 소설(리포트)을 생성합니다."
+    description="한 주간의 대화 기록을 분석하여 심리 분석 소설(리포트)을 생성합니다.",
+    responses=COMMON_RESPONSES
 )
 def create_weekly_report(
         request: WeeklyReportRequest,

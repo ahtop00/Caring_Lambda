@@ -3,6 +3,7 @@ from schema.reframing import ReframingRequest, ReframingResponse
 from schema.history import SessionListResponse, ChatHistoryResponse
 from domain.reframing_logic import ReframingService, get_reframing_service
 from domain.chat_logic import ChatService, get_chat_service
+from schema.common import COMMON_RESPONSES
 
 router = APIRouter(tags=["CBT Reframing"])
 
@@ -33,7 +34,8 @@ router = APIRouter(tags=["CBT Reframing"])
     
     3. **새로운 상담 시작**:
        - 대화 주제를 바꾸고 싶다면 `session_id`를 새로운 값(예: `NEW001`)으로 변경해서 요청하세요.
-    """
+    """,
+    responses=COMMON_RESPONSES
 )
 def reframing_endpoint(
         request: ReframingRequest,
@@ -45,7 +47,8 @@ def reframing_endpoint(
     "/chatbot/sessions",
     response_model=SessionListResponse,
     summary="채팅방 목록 조회",
-    description="사용자의 과거 상담 채팅방 목록을 최신순으로 반환합니다."
+    description="사용자의 과거 상담 채팅방 목록을 최신순으로 반환합니다.",
+    responses=COMMON_RESPONSES
 )
 def get_sessions(
         user_id: str,
@@ -57,7 +60,8 @@ def get_sessions(
     "/chatbot/history/{session_id}",
     response_model=ChatHistoryResponse,
     summary="채팅 상세 조회",
-    description="특정 세션의 대화 내용을 페이징하여 반환합니다."
+    description="특정 세션의 대화 내용을 페이징하여 반환합니다.",
+    responses=COMMON_RESPONSES
 )
 def get_history(
         session_id: str,
