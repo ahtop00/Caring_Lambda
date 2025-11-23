@@ -1,7 +1,7 @@
 # chatbot/controller/search_controller.py
 from fastapi import APIRouter, Depends
-from chatbot.schema.search import SearchRequest, SearchResponse
-from chatbot.domain.search_logic import SearchService, get_search_service
+from schema.search import SearchRequest, SearchResponse
+from domain.search_logic import SearchService, get_search_service
 
 router = APIRouter(tags=["Welfare Search"])
 

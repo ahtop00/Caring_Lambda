@@ -2,7 +2,7 @@
 import json
 import logging
 from fastapi import Depends
-from chatbot.dependency import get_db_conn
+from dependency import get_db_conn
 
 logger = logging.getLogger()
 

@@ -5,10 +5,10 @@ import logging
 from datetime import timedelta, date
 from fastapi import HTTPException, Depends
 
-from chatbot.service.llm_service import LLMService, get_llm_service
-from chatbot.repository.report_repository import ReportRepository, get_report_repository
-from chatbot.prompts.report import get_report_prompt
-from chatbot.schema.history import WeeklyReportResponse
+from service.llm_service import LLMService, get_llm_service
+from repository.report_repository import ReportRepository, get_report_repository
+from prompts.report import get_report_prompt
+from schema.history import WeeklyReportResponse
 
 logger = logging.getLogger()
 

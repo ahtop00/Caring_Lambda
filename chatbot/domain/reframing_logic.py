@@ -6,10 +6,10 @@ import boto3
 from fastapi import HTTPException, Depends
 
 from config import config
-from chatbot.prompts.reframing import get_reframing_prompt
-from chatbot.schema.reframing import ReframingRequest
-from chatbot.repository.chat_repository import ChatRepository, get_chat_repository
-from chatbot.service.llm_service import LLMService, get_llm_service
+from prompts.reframing import get_reframing_prompt
+from schema.reframing import ReframingRequest
+from repository.chat_repository import ChatRepository, get_chat_repository
+from service.llm_service import LLMService, get_llm_service
 
 logger = logging.getLogger()
 

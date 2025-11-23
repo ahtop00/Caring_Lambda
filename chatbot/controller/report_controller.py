@@ -1,7 +1,7 @@
 # chatbot/controller/report_controller.py
 from fastapi import APIRouter, Depends
-from chatbot.schema.history import WeeklyReportRequest, WeeklyReportResponse
-from chatbot.domain.report_logic import ReportService, get_report_service
+from schema.history import WeeklyReportRequest, WeeklyReportResponse
+from domain.report_logic import ReportService, get_report_service
 
 router = APIRouter(tags=["Report"])
 

@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Query, Depends
-from chatbot.schema.reframing import ReframingRequest, ReframingResponse
-from chatbot.schema.history import SessionListResponse, ChatHistoryResponse
-
-from chatbot.domain.reframing_logic import ReframingService, get_reframing_service
-from chatbot.domain.chat_logic import ChatService, get_chat_service
+from schema.reframing import ReframingRequest, ReframingResponse
+from schema.history import SessionListResponse, ChatHistoryResponse
+from domain.reframing_logic import ReframingService, get_reframing_service
+from domain.chat_logic import ChatService, get_chat_service
 
 router = APIRouter(tags=["CBT Reframing"])
 

@@ -3,7 +3,7 @@ import json
 import logging
 from datetime import date
 from fastapi import Depends
-from chatbot.dependency import get_db_conn
+from dependency import get_db_conn
 
 logger = logging.getLogger()
 

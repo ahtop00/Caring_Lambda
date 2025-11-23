@@ -1,7 +1,7 @@
 # chatbot/domain/chat_logic.py
 from fastapi import Depends
-from chatbot.schema.history import SessionListResponse, ChatHistoryResponse, ChatSessionItem, ChatMessage
-from chatbot.repository.chat_repository import ChatRepository, get_chat_repository
+from schema.history import SessionListResponse, ChatHistoryResponse, ChatSessionItem, ChatMessage
+from repository.chat_repository import ChatRepository, get_chat_repository
 
 class ChatService:
     def __init__(self, chat_repo: ChatRepository):

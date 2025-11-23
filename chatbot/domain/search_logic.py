@@ -4,10 +4,10 @@ import json
 import re
 from fastapi import HTTPException, Depends
 
-from chatbot.service.llm_service import LLMService, get_llm_service
-from chatbot.repository.search_repository import SearchRepository, get_search_repository
-from chatbot.util import response_builder
-from chatbot.prompts.search import get_search_prompt
+from service.llm_service import LLMService, get_llm_service
+from repository.search_repository import SearchRepository, get_search_repository
+from util import response_builder
+from prompts.search import get_search_prompt
 
 logger = logging.getLogger()
 
