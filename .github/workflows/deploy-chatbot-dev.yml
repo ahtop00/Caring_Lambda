@@ -1,8 +1,5 @@
-# .github/workflows/deploy-chatbot-dev.yml
-
 name: Deploy Chatbot Lambda to AWS (DEV)
 
-# 실행 조건: develop 브랜치에 push될 때 실행
 on:
   push:
     branches:
@@ -10,20 +7,34 @@ on:
     paths:
       - 'chatbot/**'
 
-  workflow_dispatch:
-    inputs:
-      logLevel:
-        description: 'Log level'
-        required: true
-        default: 'warning'
-        type: choice
-        options:
-          - info
-          - warning
-          - debug
-
 jobs:
+  # 1. 테스트 단계 (CI) - 무거운 라이브러리 포함하여 테스트 수행
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Install dependencies (For Test)
+        run: |
+          cd chatbot
+          # [핵심] 테스트용 의존성 설치 (boto3, google 등 포함됨)
+          pip install -r requirements-dev.txt
+
+      - name: Run Tests
+        run: |
+          cd chatbot
+          # -v: 상세 출력
+          pytest -v
+
+  # 2. 배포 단계 (CD) - 경량화된 라이브러리만 압축하여 배포
   deploy:
+    needs: test  # test job이 성공해야만 실행됨
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -41,9 +52,11 @@ jobs:
       - name: Install dependencies and create ZIP file
         run: |
           cd chatbot
-          # requirements.txt 설치 (boto3, google-cloud-aiplatform 등 포함)
+          # [핵심] 배포용 의존성만 설치 (-t 옵션으로 폴더에 포함)
+          # boto3, google 라이브러리는 제외되어 용량이 작아짐
           pip install -r requirements.txt -t .
-          # 압축
+          
+          # 압축 (소스코드 + 경량 라이브러리)
           zip -r ../deploy-chatbot-dev.zip .
 
       - name: Configure AWS Credentials

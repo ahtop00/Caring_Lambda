@@ -1,0 +1,11 @@
+# 배포용 패키지 포함
+-r requirements.txt
+
+# --- 개발 및 테스트 전용 (배포 제외) ---
+pytest
+httpx
+
+# --- Lambda Layer / Runtime 제공 (CI 환경용) ---
+boto3
+google-cloud-aiplatform
+google-auth

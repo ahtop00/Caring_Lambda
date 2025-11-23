@@ -1,65 +1,73 @@
-# 워크플로우 이름
-name: Deploy Chatbot Lambda to AWS
+# 워크플로우 이름 (Prod 배포용)
+name: Deploy Chatbot Lambda to AWS (PROD)
 
-# 언제 실행할지 정의: main 브랜치에 push될 때
+# 실행 조건: main 브랜치에 push될 때 실행
 on:
   push:
     branches:
       - main
-    # 💡 핵심: chatbot/ 디렉토리 안의 파일이 변경되었을 때만 이 워크플로우를 실행합니다.
     paths:
       - 'chatbot/**'
 
-  workflow_dispatch:
-    inputs:
-      logLevel:
-        description: 'Log level'
-        required: true
-        default: 'warning'
-        type: choice
-        options:
-          - info
-          - warning
-          - debug
-
 jobs:
+  # 1. 테스트 단계 (CI) - 무거운 라이브러리 포함하여 테스트 수행
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Install dependencies (For Test)
+        run: |
+          cd chatbot
+          # [핵심] 테스트용 의존성 설치 (boto3, google 등 포함됨)
+          pip install -r requirements-dev.txt
+
+      - name: Run Tests
+        run: |
+          cd chatbot
+          # -v: 상세 출력
+          pytest -v
+
+  # 2. 배포 단계 (CD) - 경량화된 라이브러리만 압축하여 배포
   deploy:
+    needs: test  # test job이 성공해야만 실행됨
     runs-on: ubuntu-latest
     permissions:
       id-token: write # AWS OIDC 인증을 위해 필요
       contents: read
 
     steps:
-      # 1. GitHub 저장소의 코드를 가져옵니다.
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Python 환경을 설정합니다.
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: 3.12
 
-      # 3. 라이브러리를 설치하고 배포용 zip 파일을 생성합니다.
       - name: Install dependencies and create ZIP file
         run: |
-          # chatbot 디렉토리로 이동
           cd chatbot
-          # requirements.txt에 명시된 라이브러리를 현재 디렉토리에 설치
+          # [핵심] 배포용 의존성만 설치 (-t 옵션으로 폴더에 포함)
+          # boto3, google 라이브러리는 제외되어 용량이 작아짐
           pip install -r requirements.txt -t .
+          
           # 설치된 라이브러리와 모든 소스 코드를 함께 압축
           zip -r ../deploy-chatbot.zip .
 
-      # 4. AWS 자격 증명을 설정합니다. (IAM Role 사용 권장)
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # ⚠️ IAM 역할 ARN을 여기에 입력하세요.
           role-to-assume: arn:aws:iam::084056488795:role/GitHubActions-Lambda-DeployRole
           aws-region: ap-northeast-2
 
-      # 5. AWS CLI를 사용해 Lambda 함수 코드를 업데이트합니다.
-      - name: Deploy to AWS Lambda
+      - name: Deploy to AWS Lambda (PROD)
         run: |
           aws lambda update-function-code \
             --function-name welfare-chatbot-handler \
