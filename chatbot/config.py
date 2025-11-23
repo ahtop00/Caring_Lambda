@@ -18,6 +18,7 @@ class AppConfig:
 
         # SQS 설정
         self.cbt_log_sqs_url = os.environ.get('CBT_LOG_SQS_URL')
+        self.diary_to_chatbot_sqs_url = os.environ.get('DIARY_TO_CHATBOT_SQS_URL')
 
         # 필수값 검증
         if not all([self.db_host, self.db_name, self.db_user, self.db_password]):
