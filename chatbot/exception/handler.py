@@ -42,7 +42,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
     logger.warning(f"유효성 검사 실패: {error_msg}")
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
             "error": True,
             "code": 422,

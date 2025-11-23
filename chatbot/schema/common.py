@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any
 
 class ErrorResponse(BaseModel):
     """전역 예외 핸들러가 반환하는 에러 응답 포맷"""
-    error: bool = Field(default=True, description="에러 발생 여부 (항상 True)", example=True)
+    error: bool = Field(default=True, description="에러 발생 여부 (항상 True)", json_schema_extra={"example": True})
     code: int = Field(..., description="HTTP 상태 코드")
     message: str = Field(..., description="에러 메시지")
     detail: Optional[str] = Field(None, description="상세 에러 내용 (Traceback 등)")
