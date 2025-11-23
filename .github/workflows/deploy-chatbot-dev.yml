@@ -1,0 +1,59 @@
+# .github/workflows/deploy-chatbot-dev.yml
+
+name: Deploy Chatbot Lambda to AWS (DEV)
+
+# 실행 조건: develop 브랜치에 push될 때 실행
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'chatbot/**'
+
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+        type: choice
+        options:
+          - info
+          - warning
+          - debug
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Install dependencies and create ZIP file
+        run: |
+          cd chatbot
+          # requirements.txt 설치 (boto3, google-cloud-aiplatform 등 포함)
+          pip install -r requirements.txt -t .
+          # 압축
+          zip -r ../deploy-chatbot-dev.zip .
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::084056488795:role/GitHubActions-Lambda-DeployRole
+          aws-region: ap-northeast-2
+
+      - name: Deploy to AWS Lambda (DEV)
+        run: |
+          aws lambda update-function-code \
+            --function-name dev-chatbot-handler \
+            --zip-file fileb://deploy-chatbot-dev.zip
