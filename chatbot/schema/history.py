@@ -1,7 +1,7 @@
 # chatbot/schema/history.py
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 
 # --- 채팅방 목록 (Session List) ---
 class ChatSessionItem(BaseModel):
@@ -27,3 +27,15 @@ class ChatHistoryResponse(BaseModel):
     messages: List[ChatMessage]
     total_page: int
     current_page: int
+
+# --- 주간 리포트 (Weekly Report) ---
+class WeeklyReportRequest(BaseModel):
+    user_id: str = Field(..., description="사용자 ID")
+    target_date: date = Field(..., description="조회하려는 날짜 (YYYY-MM-DD, 해당 날짜가 포함된 주를 분석)")
+
+class WeeklyReportResponse(BaseModel):
+    report_id: int
+    title: str
+    content: str
+    period: str
+    emotions: Dict[str, int]
