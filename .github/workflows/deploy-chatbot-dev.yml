@@ -1,11 +1,9 @@
-# 워크플로우 이름 (Prod 배포용)
-name: Deploy Chatbot Lambda to AWS (PROD)
+name: Deploy Chatbot Lambda to AWS (DEV)
 
-# 실행 조건: main 브랜치에 push될 때 실행
 on:
   push:
     branches:
-      - main
+      - develop
     paths:
       - 'chatbot/**'
 
@@ -39,7 +37,7 @@ jobs:
     needs: test  # test job이 성공해야만 실행됨
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # AWS OIDC 인증을 위해 필요
+      id-token: write
       contents: read
 
     steps:
@@ -58,8 +56,8 @@ jobs:
           # boto3, google 라이브러리는 제외되어 용량이 작아짐
           pip install -r requirements.txt -t .
           
-          # 설치된 라이브러리와 모든 소스 코드를 함께 압축
-          zip -r ../deploy-chatbot.zip .
+          # 압축 (소스코드 + 경량 라이브러리)
+          zip -r ../deploy-chatbot-dev.zip .
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -67,8 +65,8 @@ jobs:
           role-to-assume: arn:aws:iam::084056488795:role/GitHubActions-Lambda-DeployRole
           aws-region: ap-northeast-2
 
-      - name: Deploy to AWS Lambda (PROD)
+      - name: Deploy to AWS Lambda (DEV)
         run: |
           aws lambda update-function-code \
-            --function-name welfare-chatbot-handler \
-            --zip-file fileb://deploy-chatbot.zip
+            --function-name dev-chatbot-handler \
+            --zip-file fileb://deploy-chatbot-dev.zip

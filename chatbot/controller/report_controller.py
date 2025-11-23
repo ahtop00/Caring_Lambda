@@ -1,7 +1,8 @@
 # chatbot/controller/report_controller.py
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from schema.history import WeeklyReportRequest, WeeklyReportResponse
-from domain import report_logic
+from domain.report_logic import ReportService, get_report_service
+from schema.common import COMMON_RESPONSES
 
 router = APIRouter(tags=["Report"])
 
@@ -9,7 +10,11 @@ router = APIRouter(tags=["Report"])
     "/chatbot/report/weekly",
     response_model=WeeklyReportResponse,
     summary="주간 마음 소설 생성",
-    description="지정된 날짜가 포함된 한 주간의 대화 기록을 분석하여, AI가 작성한 심리 분석 소설(리포트)을 생성하고 반환합니다."
+    description="한 주간의 대화 기록을 분석하여 심리 분석 소설(리포트)을 생성합니다.",
+    responses=COMMON_RESPONSES
 )
-def create_weekly_report(request: WeeklyReportRequest):
-    return report_logic.generate_weekly_report(request.user_id, request.target_date)
+def create_weekly_report(
+        request: WeeklyReportRequest,
+        service: ReportService = Depends(get_report_service)
+):
+    return service.generate_weekly_report(request.user_id, request.target_date)
