@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from controller import chat_controller, search_controller
+from controller import chat_controller, search_controller, report_controller
 
 tags_metadata = [
     {
@@ -28,7 +28,7 @@ app = FastAPI(
     * **🧠 CBT 리프레이밍**: 사용자의 부정적 사고를 분석하고, 건강한 관점으로 전환 유도
     * **📊 심리 분석**: 대화 로그를 분석하여 사용자의 핵심 신념(Core Belief) 파악 (데이터 적재)
     """,
-    version="1.2.0",
+    version="0.3.0",
     contact={
         "name": "SAPORI Dev Team",
         "email": "ehcl1027@gmail.com",
@@ -41,6 +41,7 @@ app = FastAPI(
 
 app.include_router(search_controller.router)
 app.include_router(chat_controller.router)
+app.include_router(report_controller.router)
 
 @app.get("/chatbot/health", tags=["Health Check"], summary="서버 상태 확인")
 def health_check():
