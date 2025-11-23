@@ -5,6 +5,7 @@
 pytest
 httpx
 pytest-cov
+python-dotenv
 
 # --- Lambda Layer / Runtime 제공 (CI 환경용) ---
 boto3
