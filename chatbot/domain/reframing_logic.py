@@ -1,7 +1,6 @@
 # chatbot/domain/reframing_logic.py
 import logging
 import json
-import re
 import boto3
 from fastapi import Depends
 
@@ -11,6 +10,7 @@ from prompts.reframing import get_reframing_prompt
 from schema.reframing import ReframingRequest
 from repository.chat_repository import ChatRepository, get_chat_repository
 from service.llm_service import LLMService, get_llm_service
+from util.json_parser import parse_llm_json
 
 logger = logging.getLogger()
 
@@ -31,17 +31,13 @@ class ReframingService:
             # [LLM]
             llm_raw_response = self.llm_service.get_llm_response(prompt, use_bedrock=False)
 
-            # JSON 파싱
+            # JSON 파싱 로직
             bot_response_dict = {}
-            json_match = re.search(r'\{.*\}', llm_raw_response, re.DOTALL)
-            if json_match:
-                try:
-                    bot_response_dict = json.loads(json_match.group(0))
-                except json.JSONDecodeError:
-                    logger.warning("LLM 응답 JSON 디코딩 실패 -> Fallback 사용")
-                    bot_response_dict = self._create_fallback_response("JSON 형식 오류 발생")
-            else:
-                logger.warning("LLM 응답에서 JSON 패턴 찾지 못함 -> Fallback 사용")
+            try:
+                bot_response_dict = parse_llm_json(llm_raw_response)
+            except ValueError:
+                # 파싱 실패 시 Fallback 응답 생성
+                logger.warning("LLM 응답 파싱 실패 -> Fallback 사용")
                 bot_response_dict = self._create_fallback_response(llm_raw_response)
 
             # [비동기 저장 요청]
@@ -58,7 +54,6 @@ class ReframingService:
                         MessageBody=json.dumps(message_body, ensure_ascii=False)
                     )
                 except Exception as sqs_e:
-                    # SQS 실패는 메인 로직을 중단시키지 않고 로그만 남김
                     logger.error(f"SQS 전송 실패 (로그 유실 가능성): {sqs_e}")
 
             return bot_response_dict

@@ -1,2 +1,3 @@
 /.idea/
 /chatbot/.env
+/chatbot/.coverage

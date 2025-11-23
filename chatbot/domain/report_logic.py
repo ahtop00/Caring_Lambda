@@ -1,6 +1,4 @@
 # chatbot/domain/report_logic.py
-import json
-import re
 import logging
 from datetime import timedelta, date
 from fastapi import Depends
@@ -10,6 +8,7 @@ from service.llm_service import LLMService, get_llm_service
 from repository.report_repository import ReportRepository, get_report_repository
 from prompts.report import get_report_prompt
 from schema.history import WeeklyReportResponse
+from util.json_parser import parse_llm_json
 
 logger = logging.getLogger()
 
@@ -48,16 +47,13 @@ class ReportService:
 
             # JSON 파싱
             try:
-                json_match = re.search(r'\{.*\}', llm_raw, re.DOTALL)
-                if json_match:
-                    report_data = json.loads(json_match.group(0))
-                else:
-                    raise ValueError("JSON 형식을 찾을 수 없음")
-            except Exception as parse_e:
+                report_data = parse_llm_json(llm_raw)
+            except ValueError as parse_e:
+                # 어떤 내용이라도 저장하거나, 명확하게 에러 로그를 남기는 것이 좋음
                 logger.error(f"리포트 생성 중 파싱 오류: {parse_e}")
                 report_data = {
-                    "title": "주간 마음 정리",
-                    "content": llm_raw,
+                    "title": "주간 마음 정리 (생성 실패)",
+                    "content": llm_raw, # 원본 텍스트라도 저장 시도
                     "emotions": {}
                 }
 

@@ -4,6 +4,7 @@
 # --- 개발 및 테스트 전용 (배포 제외) ---
 pytest
 httpx
+pytest-cov
 
 # --- Lambda Layer / Runtime 제공 (CI 환경용) ---
 boto3
