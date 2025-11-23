@@ -1,7 +1,8 @@
 # chatbot/service/worker_service.py
 import json
 import logging
-from service import llm_service, db_service
+from service import llm_service
+from repository import chat_repository
 
 logger = logging.getLogger()
 
@@ -41,7 +42,7 @@ def process_sqs_batch(records: list) -> dict:
                 embedding = [0.0] * 1024 # 실패 시 0 벡터 처리
 
             # [작업 B] DB 저장
-            db_service.log_cbt_session(
+            chat_repository.log_cbt_session(
                 user_id=user_id,
                 session_id=session_id,
                 user_input=user_input,

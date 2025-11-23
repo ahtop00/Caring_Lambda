@@ -6,7 +6,8 @@ import boto3
 from fastapi import HTTPException
 
 from config import config  # [수정] 중앙 설정 파일 임포트
-from service import llm_service, db_service
+from service import llm_service
+from repository import chat_repository
 from prompts.reframing import get_reframing_prompt
 from schema.reframing import ReframingRequest
 
@@ -22,7 +23,7 @@ def execute_reframing(request: ReframingRequest) -> dict:
     """
     try:
         # [기억] DB에서 이번 세션의 대화 내역 조회
-        history = db_service.get_chat_history(request.session_id, limit=5)
+        history = chat_repository.get_chat_history(request.session_id, limit=5)
 
         # [생각] 프롬프트 구성 및 Gemini 호출
         prompt = get_reframing_prompt(request.user_input, history)

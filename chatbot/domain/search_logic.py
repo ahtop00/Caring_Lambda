@@ -4,7 +4,8 @@ import json
 import re
 from fastapi import HTTPException
 
-from service import db_service, llm_service
+from service import llm_service
+from repository import search_repository
 from util import response_builder
 from prompts.search import get_search_prompt
 
@@ -21,8 +22,8 @@ def execute_search(user_chat: str, user_info: str, use_bedrock: bool) -> dict:
         embedding = llm_service.get_embedding(user_chat)
 
         # 2. DB 검색
-        welfare_results = db_service.search_welfare_services(embedding, locations)
-        employment_results = db_service.search_employment_jobs(embedding)
+        welfare_results = search_repository.search_welfare_services(embedding, locations)
+        employment_results = search_repository.search_employment_jobs(embedding)
 
         logger.info(f"검색 결과: 복지 {len(welfare_results)}건, 채용 {len(employment_results)}건")
 
