@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Query
-from schema.reframing import ReframingRequest, ReframingResponse
-from schema.history import SessionListResponse, ChatHistoryResponse
-from domain.reframing_logic import execute_reframing
-from domain import chat_logic
+from fastapi import APIRouter, Query, Depends
+from chatbot.schema.reframing import ReframingRequest, ReframingResponse
+from chatbot.schema.history import SessionListResponse, ChatHistoryResponse
+
+from chatbot.domain.reframing_logic import ReframingService, get_reframing_service
+from chatbot.domain.chat_logic import ChatService, get_chat_service
 
 router = APIRouter(tags=["CBT Reframing"])
 
@@ -35,8 +36,11 @@ router = APIRouter(tags=["CBT Reframing"])
        - 대화 주제를 바꾸고 싶다면 `session_id`를 새로운 값(예: `NEW001`)으로 변경해서 요청하세요.
     """
 )
-def reframing_endpoint(request: ReframingRequest):
-    return execute_reframing(request)
+def reframing_endpoint(
+        request: ReframingRequest,
+        service: ReframingService = Depends(get_reframing_service)
+):
+    return service.execute_reframing(request)
 
 @router.get(
     "/chatbot/sessions",
@@ -44,8 +48,11 @@ def reframing_endpoint(request: ReframingRequest):
     summary="채팅방 목록 조회",
     description="사용자의 과거 상담 채팅방 목록을 최신순으로 반환합니다."
 )
-def get_sessions(user_id: str):
-    return chat_logic.get_user_sessions(user_id)
+def get_sessions(
+        user_id: str,
+        service: ChatService = Depends(get_chat_service)
+):
+    return service.get_user_sessions(user_id)
 
 @router.get(
     "/chatbot/history/{session_id}",
@@ -53,5 +60,9 @@ def get_sessions(user_id: str):
     summary="채팅 상세 조회",
     description="특정 세션의 대화 내용을 페이징하여 반환합니다."
 )
-def get_history(session_id: str, page: int = Query(1, ge=1)):
-    return chat_logic.get_session_history(session_id, page)
+def get_history(
+        session_id: str,
+        page: int = Query(1, ge=1),
+        service: ChatService = Depends(get_chat_service)
+):
+    return service.get_session_history(session_id, page)

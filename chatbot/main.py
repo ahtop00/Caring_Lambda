@@ -28,7 +28,7 @@ app = FastAPI(
     * **🧠 CBT 리프레이밍**: 사용자의 부정적 사고를 분석하고, 건강한 관점으로 전환 유도
     * **📊 심리 분석**: 대화 로그를 분석하여 사용자의 핵심 신념(Core Belief) 파악 (데이터 적재)
     """,
-    version="0.3.0",
+    version="0.3.1",
     contact={
         "name": "SAPORI Dev Team",
         "email": "ehcl1027@gmail.com",
