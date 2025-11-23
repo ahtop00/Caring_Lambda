@@ -1,6 +1,6 @@
 # chatbot/schema/history.py
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime, date
 
 # --- 채팅방 목록 (Session List) ---
