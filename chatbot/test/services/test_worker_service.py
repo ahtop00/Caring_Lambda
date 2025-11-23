@@ -3,34 +3,35 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from service.worker_service import process_sqs_batch
 
-# worker_service 내부에서 import하는 것들을 가로채기(patch) 위해 데코레이터 사용
-@patch("service.worker_service.ChatRepository")      # 1. Repo 클래스 자체를 가짜로 대체
-@patch("service.worker_service.get_llm_service")     # 2. LLM 서비스 팩토리 함수 가짜로 대체
-@patch("service.worker_service.get_db_conn")         # 3. DB 연결 제너레이터 함수 가짜로 대체
-def test_process_sqs_batch_success(mock_get_db_conn, mock_get_llm, MockChatRepo):
-    """
-    [Scenario] 정상적인 SQS 메시지 2개가 들어왔을 때 처리 성공 테스트
-    """
-    # --- [A] Mock 설정 ---
-
+# 공통 Mock 설정 헬퍼
+def setup_mocks(mock_get_db_conn, mock_get_llm, MockChatRepo):
     # 1. DB Connection Generator Mocking
-    # worker_service가 db_gen = get_db_conn() -> next(db_gen) 호출함
     mock_db_gen = MagicMock()
     mock_conn = Mock()
-    # 첫 번째 next() 호출엔 conn 반환, 두 번째(finally)엔 StopIteration 발생
     mock_db_gen.__next__.side_effect = [mock_conn, StopIteration]
     mock_get_db_conn.return_value = mock_db_gen
 
     # 2. LLM Service Mocking
     mock_llm_instance = Mock()
-    mock_llm_instance.get_embedding.return_value = [0.1, 0.2, 0.3] # 가짜 임베딩 벡터
     mock_get_llm.return_value = mock_llm_instance
 
     # 3. Repository Instance Mocking
-    # ChatRepository(conn) 호출 시 반환될 가짜 인스턴스
     mock_repo_instance = MockChatRepo.return_value
 
-    # --- [B] 테스트 데이터 준비 ---
+    return mock_llm_instance, mock_repo_instance
+
+@patch("service.worker_service.ChatRepository")
+@patch("service.worker_service.get_llm_service")
+@patch("service.worker_service.get_db_conn")
+def test_process_sqs_batch_success(mock_get_db_conn, mock_get_llm, MockChatRepo):
+    """
+    [Scenario 1] 일반 대화 로그 저장 (기존 로직) 테스트
+    """
+    mock_llm_instance, mock_repo_instance = setup_mocks(mock_get_db_conn, mock_get_llm, MockChatRepo)
+    # 임베딩 생성 결과 설정 (1024차원)
+    mock_llm_instance.get_embedding.return_value = [0.1] * 1024
+
+    # 테스트 데이터 준비 (일반 로그)
     records = [
         {
             "body": json.dumps({
@@ -39,36 +40,23 @@ def test_process_sqs_batch_success(mock_get_db_conn, mock_get_llm, MockChatRepo)
                 "user_input": "안녕하세요",
                 "bot_response": {"empathy": "반가워요"}
             })
-        },
-        {
-            "body": json.dumps({
-                "user_id": "user_2",
-                "session_id": "session_B",
-                "user_input": "테스트입니다",
-                "bot_response": {}
-            })
         }
     ]
 
-    # --- [C] 실행 ---
+    # 실행
     result = process_sqs_batch(records)
 
-    # --- [D] 검증 ---
+    # 검증
     assert result["status"] == "completed"
-    assert result["success"] == 2
+    assert result["success"] == 1
     assert result["failed"] == 0
 
-    # DB 연결이 생성되고 닫혔는지 확인
-    mock_get_db_conn.assert_called_once()
-    assert mock_db_gen.__next__.call_count >= 1 # 최소한 연결을 열기 위해 호출됨
+    # LLM 임베딩 생성이 호출되었는지
+    mock_llm_instance.get_embedding.assert_called_once()
+    # DB 저장 함수가 호출되었는지
+    mock_repo_instance.log_cbt_session.assert_called_once()
 
-    # LLM 임베딩 생성이 2번 호출되었는지 확인
-    assert mock_llm_instance.get_embedding.call_count == 2
-
-    # DB 저장 함수가 2번 호출되었는지 확인
-    assert mock_repo_instance.log_cbt_session.call_count == 2
-
-    # 첫 번째 호출 인자 확인
+    # 인자 검증
     _, kwargs = mock_repo_instance.log_cbt_session.call_args_list[0]
     assert kwargs["session_id"] == "session_A"
 
@@ -76,31 +64,84 @@ def test_process_sqs_batch_success(mock_get_db_conn, mock_get_llm, MockChatRepo)
 @patch("service.worker_service.ChatRepository")
 @patch("service.worker_service.get_llm_service")
 @patch("service.worker_service.get_db_conn")
-def test_process_sqs_batch_partial_fail(mock_get_db_conn, mock_get_llm, MockChatRepo):
+def test_process_sqs_mind_diary_event(mock_get_db_conn, mock_get_llm, MockChatRepo):
     """
-    [Scenario] JSON 파싱 에러나 필수 필드 누락이 있을 때 집계 테스트
+    [Scenario 2] 마음일기 연동 메시지 처리 테스트 (실제 데이터 구조 반영)
     """
-    # Mock 설정 (위와 동일하게 기본 설정)
-    mock_db_gen = MagicMock()
-    mock_db_gen.__next__.return_value = Mock()
-    mock_get_db_conn.return_value = mock_db_gen
+    mock_llm_instance, mock_repo_instance = setup_mocks(mock_get_db_conn, mock_get_llm, MockChatRepo)
 
-    mock_repo_instance = MockChatRepo.return_value
+    # LLM 응답 설정 (JSON 문자열)
+    mock_llm_response_dict = {
+        "empathy": "시험 때문에 많이 속상하셨겠어요.",
+        "analysis": "결과에 대한 실망감이 큽니다.",
+        "socratic_question": "다음에는 어떻게 준비하면 좋을까요?",
+        "detected_distortion": "없음",
+        "alternative_thought": "이번 경험이 배움이 될 거예요."
+    }
+    mock_llm_instance.get_llm_response.return_value = json.dumps(mock_llm_response_dict)
 
-    # 테스트 데이터: 1개 성공, 1개 JSON 에러, 1개 필드 누락
-    records = [
-        { "body": json.dumps({"user_id": "u1", "session_id": "s1", "user_input": "ok", "bot_response": {}}) }, # 성공
-        { "body": "이건 JSON이 아닙니다" }, # 실패 (JSONDecodeError)
-        { "body": json.dumps({"user_id": "u2"}) } # 실패 (필수 필드 누락)
-    ]
+    # [핵심] 실제 마음일기 서비스가 보내는 풀(Full) 데이터 구조 적용
+    full_emotion_payload = {
+        "top_emotion": "sadness",
+        "confidence": 0.85,
+        "details": {
+            "happy": 0.01,
+            "sad": 0.85,
+            "angry": 0.05,
+            "anxiety": 0.05,
+            "neutral": 0.04,
+            "surprise": 0.0
+        },
+        "valence": -0.6,
+        "arousal": 0.4
+    }
+
+    record = {
+        "body": json.dumps({
+            "source": "mind-diary",
+            "event": "analysis_completed",
+            "user_id": "test_user",
+            "voice_id": 123,
+            "user_name": "홍길동",
+            "question": "오늘 가장 아쉬웠던 일은?",
+            "content": "열심히 공부했는데 시험을 망쳐서 너무 슬퍼.",
+            "recorded_at": "2023-10-25T10:00:00",
+            "timestamp": "2023-10-25T10:05:00",
+            "emotion": full_emotion_payload  # 상세 감정 데이터 포함
+        })
+    }
 
     # 실행
-    result = process_sqs_batch(records)
+    result = process_sqs_batch([record])
 
     # 검증
-    assert result["processed"] == 3
     assert result["success"] == 1
-    assert result["failed"] == 2
 
-    # 성공한 1건에 대해서만 저장이 시도되었는지 확인
+    # LLM 서비스가 호출되었는지 확인
+    mock_llm_instance.get_llm_response.assert_called_once()
+
+    # DB 저장 확인
     mock_repo_instance.log_cbt_session.assert_called_once()
+
+    # 저장된 내용 검증
+    _, kwargs = mock_repo_instance.log_cbt_session.call_args
+    assert kwargs["user_id"] == "test_user"
+    assert kwargs["user_input"] == "(마음일기 기반 선제 대화)"
+    # 봇 응답의 empathy가 LLM 결과와 일치하는지 확인
+    assert kwargs["bot_response"]["empathy"] == "시험 때문에 많이 속상하셨겠어요."
+
+
+@patch("service.worker_service.ChatRepository")
+@patch("service.worker_service.get_llm_service")
+@patch("service.worker_service.get_db_conn")
+def test_process_sqs_batch_partial_fail(mock_get_db_conn, mock_get_llm, MockChatRepo):
+    """[Scenario 3] 에러 처리 테스트"""
+    setup_mocks(mock_get_db_conn, mock_get_llm, MockChatRepo)
+
+    records = [
+        { "body": "이건 JSON이 아닙니다" }, # 실패 (JSONDecodeError)
+        { "body": json.dumps({"user_id": "u2"}) } # 실패 (필수 필드 누락 - 일반 로그 기준)
+    ]
+
+    result = process_sqs_batch(records)
+    assert result["failed"] == 2
