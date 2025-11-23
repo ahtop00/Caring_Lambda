@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from schema.reframing import ReframingRequest, ReframingResponse
 from schema.history import SessionListResponse, ChatHistoryResponse
 from domain.reframing_logic import execute_reframing
