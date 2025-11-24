@@ -4,7 +4,7 @@ import json
 from unittest.mock import Mock
 from datetime import date
 
-from schema.history import WeeklyReportResponse
+from schema.history import WeeklyReportResponse, MonthlyReportListResponse
 from domain.report_logic import ReportService
 from repository.report_repository import ReportRepository
 from service.llm_service import LLMService
@@ -99,3 +99,66 @@ def test_generate_weekly_report_parsing_error():
     args, _ = mock_repo.save_weekly_report.call_args
     saved_data = args[3]
     assert saved_data["content"] == bad_response
+
+def test_get_reports_by_month_success():
+    """
+    [Scenario] DB에 저장된 월별 리포트 목록을 정상적으로 조회하고 변환하는지 테스트
+    """
+    # 1. Mock 객체 생성
+    mock_repo = Mock(spec=ReportRepository)
+    mock_llm = Mock(spec=LLMService)
+
+    # 2. 가짜 데이터 설정 (DB에서 fetchall()로 가져온 튜플 리스트 형태)
+    # 스키마: (report_id, start_date, end_date, report_title, report_content, emotions_summary)
+    mock_rows = [
+        (10, date(2025, 3, 1), date(2025, 3, 7), "3월 첫째주 이야기", "봄이 오네요.", '{"happy": 5, "sad": 1}'),
+        (11, date(2025, 3, 8), date(2025, 3, 14), None, None, None) # 제목/내용/감정이 없는 경우(엣지 케이스)
+    ]
+    mock_repo.find_reports_by_month.return_value = mock_rows
+
+    # 3. 서비스 초기화
+    service = ReportService(report_repo=mock_repo, llm_service=mock_llm)
+
+    # 4. 실행
+    result = service.get_reports_by_month(user_id="test_user", year=2025, month=3)
+
+    # 5. 검증
+    assert isinstance(result, MonthlyReportListResponse)
+    assert result.year == 2025
+    assert result.month == 3
+    assert len(result.reports) == 2
+
+    # 첫 번째 리포트 검증 (정상 데이터)
+    item1 = result.reports[0]
+    assert item1.report_id == 10
+    assert item1.title == "3월 첫째주 이야기"
+    assert item1.emotions["happy"] == 5
+    assert item1.created_at == date(2025, 3, 1)
+
+    # 두 번째 리포트 검증 (None 데이터 처리 확인)
+    item2 = result.reports[1]
+    assert item2.report_id == 11
+    assert item2.title == "제목 없음" # 로직에서 None일 때 기본값 처리 확인
+    assert item2.emotions == {}      # None일 때 빈 딕셔너리 처리 확인
+
+    # Repository 호출 확인
+    mock_repo.find_reports_by_month.assert_called_once_with("test_user", 2025, 3)
+
+def test_get_reports_by_month_not_found():
+    """
+    [Scenario] 조회 결과가 없을 때 404 에러가 발생하는지 테스트
+    """
+    mock_repo = Mock(spec=ReportRepository)
+    mock_llm = Mock(spec=LLMService)
+
+    # DB 반환값이 빈 리스트
+    mock_repo.find_reports_by_month.return_value = []
+
+    service = ReportService(report_repo=mock_repo, llm_service=mock_llm)
+
+    # 404 에러 발생 확인
+    with pytest.raises(AppError) as exc_info:
+        service.get_reports_by_month("user_1", 2025, 3)
+
+    assert exc_info.value.status_code == 404
+    assert "없습니다" in exc_info.value.message

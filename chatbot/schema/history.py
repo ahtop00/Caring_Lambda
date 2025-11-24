@@ -39,3 +39,17 @@ class WeeklyReportResponse(BaseModel):
     content: str
     period: str
     emotions: Dict[str, int]
+
+# --- 월별 리포트 조회 ---
+class WeeklyReportItem(BaseModel):
+    report_id: int
+    title: str = Field(..., description="소설 제목")
+    content: str = Field(..., description="소설 본문")
+    period: str = Field(..., description="분석 기간 (YYYY-MM-DD ~ YYYY-MM-DD)")
+    emotions: Dict[str, int] = Field(..., description="감정 통계")
+    created_at: date = Field(..., description="리포트 생성일(주간 시작일 기준)")
+
+class MonthlyReportListResponse(BaseModel):
+    year: int
+    month: int
+    reports: List[WeeklyReportItem]
