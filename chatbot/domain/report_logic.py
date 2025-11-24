@@ -1,5 +1,6 @@
 # chatbot/domain/report_logic.py
 import logging
+import json
 from datetime import timedelta, date
 from fastapi import Depends
 
@@ -7,7 +8,7 @@ from exception import AppError
 from service.llm_service import LLMService, get_llm_service
 from repository.report_repository import ReportRepository, get_report_repository
 from prompts.report import get_report_prompt
-from schema.history import WeeklyReportResponse
+from schema.history import WeeklyReportResponse, WeeklyReportItem, MonthlyReportListResponse
 from util.json_parser import parse_llm_json
 
 logger = logging.getLogger()
@@ -78,6 +79,55 @@ class ReportService:
             raise AppError(
                 status_code=500,
                 message="리포트 생성 중 알 수 없는 오류가 발생했습니다.",
+                detail=str(e)
+            )
+
+    def get_reports_by_month(self, user_id: str, year: int, month: int) -> MonthlyReportListResponse:
+        try:
+            rows = self.report_repo.find_reports_by_month(user_id, year, month)
+
+            if not rows:
+                raise AppError(
+                    status_code=404,
+                    message=f"{year}년 {month}월에 생성된 마음 소설이 없습니다.",
+                    detail=f"No reports found for user={user_id}, period={year}-{month}"
+                )
+
+            reports = []
+            for r in rows:
+                # r: (report_id, start_date, end_date, report_title, report_content, emotions_summary)
+                emotions = r[5]
+                if isinstance(emotions, str):
+                    try:
+                        emotions = json.loads(emotions)
+                    except:
+                        emotions = {}
+
+                period_str = f"{r[1].strftime('%Y-%m-%d')} ~ {r[2].strftime('%Y-%m-%d')}"
+
+                reports.append(WeeklyReportItem(
+                    report_id=r[0],
+                    title=r[3] or "제목 없음",
+                    content=r[4] or "",
+                    period=period_str,
+                    emotions=emotions or {},
+                    created_at=r[1]
+                ))
+
+            return MonthlyReportListResponse(
+                year=year,
+                month=month,
+                reports=reports
+            )
+
+        except AppError as ae:
+            raise ae
+
+        except Exception as e:
+            logger.error(f"월별 리포트 조회 중 시스템 오류: {e}", exc_info=True)
+            raise AppError(
+                status_code=500,
+                message="리포트 목록을 불러오는 중 알 수 없는 오류가 발생했습니다.",
                 detail=str(e)
             )
 
