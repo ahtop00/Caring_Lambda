@@ -67,7 +67,7 @@ class ReportRepository:
             WHERE user_id = %s
               AND EXTRACT(YEAR FROM start_date) = %s
               AND EXTRACT(MONTH FROM start_date) = %s
-            ORDER BY start_date DESC
+            ORDER BY start_date ASC
         """
         try:
             with self.conn.cursor() as cur:
