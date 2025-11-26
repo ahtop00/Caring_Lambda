@@ -1,5 +1,5 @@
 # chatbot/schema/reframing.py
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 # --- 요청 (Request) ---
@@ -25,7 +25,7 @@ class VoiceReframingRequest(BaseModel):
     session_id: str = Field(..., description="대화 스레드 ID (랜덤 6자리)")
     user_input: str = Field(..., description="현재 사용자의 발화, STT 결과")
 
-    emotion: Dict[str, float] = Field(
+    emotion: Dict[str, Any] = Field(
         ...,
         description="감정 분석 결과 (예: {'valence': 0.8, 'arousal': 0.5, 'top_emotion': 'happy'})"
     )
