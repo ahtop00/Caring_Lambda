@@ -1,5 +1,6 @@
 # chatbot/domain/chat_logic.py
 import logging
+import json
 from fastapi import Depends
 
 from exception import AppError
@@ -18,16 +19,25 @@ class ChatService:
             sessions = []
             for r in rows:
                 # r: (session_id, user_input, created_at, bot_response_json)
-                bot_res = r[3] if isinstance(r[3], dict) else {}
+                bot_res = r[3]
+                if isinstance(bot_res, str):
+                    try:
+                        bot_res = json.loads(bot_res)
+                    except:
+                        bot_res = {}
+                elif not isinstance(bot_res, dict):
+                    bot_res = {}
 
                 distortion = bot_res.get("detected_distortion")
                 tags = [distortion] if distortion and distortion != "분석 불가" else []
+                emotion = bot_res.get("emotion")
 
                 sessions.append(ChatSessionItem(
                     session_id=r[0],
                     last_message=r[1],
                     last_updated=r[2],
-                    distortion_tags=tags
+                    distortion_tags=tags,
+                    emotion=emotion
                 ))
             return SessionListResponse(sessions=sessions)
 

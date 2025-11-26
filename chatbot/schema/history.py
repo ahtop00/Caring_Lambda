@@ -9,6 +9,10 @@ class ChatSessionItem(BaseModel):
     last_message: str = Field(..., description="마지막 대화 내용 (미리보기)")
     last_updated: datetime = Field(..., description="마지막 대화 시각")
     distortion_tags: List[str] = Field(default=[], description="이 방에서 감지된 주요 왜곡 태그")
+    emotion: Optional[str] = Field(
+        None,
+        description="해당 세션의 마지막 대화에서 분석된 감정 (예: anxiety, happy)"
+    )
 
 class SessionListResponse(BaseModel):
     sessions: List[ChatSessionItem]
