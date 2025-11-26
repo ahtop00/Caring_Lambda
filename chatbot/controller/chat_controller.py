@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query, Depends
-from schema.reframing import ReframingRequest, ReframingResponse
+from schema.reframing import ReframingRequest, ReframingResponse, VoiceReframingRequest
 from schema.history import SessionListResponse, ChatHistoryResponse
 from domain.reframing_logic import ReframingService, get_reframing_service
 from domain.chat_logic import ChatService, get_chat_service
@@ -42,6 +42,18 @@ def reframing_endpoint(
         service: ReframingService = Depends(get_reframing_service)
 ):
     return service.execute_reframing(request)
+
+@router.post(
+    "/chatbot/voice-reframing",
+    response_model=ReframingResponse,
+    summary="음성 기반 상담 (감정 데이터 포함)",
+    description="caring-back에서 분석된 음성 감정 데이터를 포함하여 상담을 진행합니다."
+)
+def voice_reframing_endpoint(
+        request: VoiceReframingRequest,
+        service: ReframingService = Depends(get_reframing_service)
+):
+    return service.execute_voice_reframing(request)
 
 @router.get(
     "/chatbot/sessions",
