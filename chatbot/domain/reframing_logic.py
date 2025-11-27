@@ -82,7 +82,13 @@ class ReframingService:
             bot_response_dict["emotion"] = raw_emotion
 
             # [비동기 저장 요청]
-            self._send_log_to_sqs(request.user_id, request.session_id, request.user_input, bot_response_dict)
+            self._send_log_to_sqs(
+                request.user_id,
+                request.session_id,
+                request.user_input,
+                bot_response_dict,
+                s3_url=request.s3_url
+            )
 
             return bot_response_dict
 
@@ -100,14 +106,15 @@ class ReframingService:
             "emotion": "neutral"
         }
 
-    def _send_log_to_sqs(self, user_id, session_id, user_input, bot_response):
+    def _send_log_to_sqs(self, user_id, session_id, user_input, bot_response, s3_url=None):
         if config.cbt_log_sqs_url:
             try:
                 message_body = {
                     "user_id": user_id,
                     "session_id": session_id,
                     "user_input": user_input,
-                    "bot_response": bot_response
+                    "bot_response": bot_response,
+                    "s3_url": s3_url
                 }
                 self.sqs_client.send_message(
                     QueueUrl=config.cbt_log_sqs_url,

@@ -25,6 +25,8 @@ class ChatMessage(BaseModel):
     # 봇 응답일 경우 추가 정보
     distortion: Optional[str] = None
     empathy: Optional[str] = None
+    # 음성 파일 URL (사용자 메시지인 경우)
+    s3_url: Optional[str] = Field(None, description="업로드된 음성 파일 URL")
 
 class ChatHistoryResponse(BaseModel):
     session_id: str

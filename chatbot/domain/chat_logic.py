@@ -62,14 +62,16 @@ class ChatService:
 
             messages = []
             for r in rows:
-                # r: (user_input, bot_response, created_at)
+                # r: (user_input, bot_response, created_at, s3_url)
                 bot_res = r[1] if isinstance(r[1], dict) else {}
+                s3_url = r[3]
 
                 # 사용자 메시지
                 messages.append(ChatMessage(
                     role="user",
                     content=r[0],
-                    timestamp=r[2]
+                    timestamp=r[2],
+                    s3_url=s3_url
                 ))
 
                 # 봇 메시지

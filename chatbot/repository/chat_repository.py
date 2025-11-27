@@ -29,11 +29,13 @@ class ChatRepository:
             logger.error(f"대화 내역 조회 실패: {e}")
             return []
 
-    def log_cbt_session(self, user_id: str, session_id: str, user_input: str, bot_response: dict, embedding: list):
-        """상담 로그 및 벡터 DB 저장"""
+    def log_cbt_session(self, user_id: str, session_id: str, user_input: str, bot_response: dict, embedding: list, s3_url: str = None):
+        """
+        상담 로그 및 벡터 DB 저장
+        """
         sql = """
-            INSERT INTO cbt_logs (user_id, session_id, user_input, bot_response, embedding)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO cbt_logs (user_id, session_id, user_input, bot_response, embedding, s3_url)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """
         try:
             with self.conn.cursor() as cur:
@@ -42,7 +44,8 @@ class ChatRepository:
                     session_id,
                     user_input,
                     json.dumps(bot_response, ensure_ascii=False),
-                    json.dumps(embedding)
+                    json.dumps(embedding),
+                    s3_url
                 ))
                 self.conn.commit()
                 logger.info(f"CBT 로그 DB 저장 완료 (Session: {session_id})")
@@ -77,12 +80,14 @@ class ChatRepository:
             return []
 
     def get_session_messages(self, session_id: str, limit: int, offset: int) -> tuple:
-        """특정 세션의 대화 상세 조회 (페이징)"""
+        """
+        특정 세션의 대화 상세 조회 (페이징)
+        """
         count_sql = "SELECT COUNT(*) FROM cbt_logs WHERE session_id = %s"
 
         # ORDER BY created_at ASC -> DESC
         data_sql = """
-            SELECT user_input, bot_response, created_at 
+            SELECT user_input, bot_response, created_at, s3_url
             FROM cbt_logs
             WHERE session_id = %s
             ORDER BY created_at DESC

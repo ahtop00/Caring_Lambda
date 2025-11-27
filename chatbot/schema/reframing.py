@@ -30,3 +30,4 @@ class VoiceReframingRequest(BaseModel):
         description="감정 분석 결과 (예: {'valence': 0.8, 'arousal': 0.5, 'top_emotion': 'happy'})"
     )
     user_name: Optional[str] = "내담자"
+    s3_url: Optional[str] = Field(None, description="업로드된 음성 파일의 S3 URL")

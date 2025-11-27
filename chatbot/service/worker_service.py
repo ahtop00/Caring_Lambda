@@ -82,6 +82,7 @@ def _handle_log_archiving(payload: dict, repo: ChatRepository, llm) -> bool:
         session_id = payload.get('session_id')
         user_input = payload.get('user_input')
         bot_response = payload.get('bot_response')
+        s3_url = payload.get('s3_url')
 
         # 필수 필드 검증
         if not all([user_id, session_id, user_input]):
@@ -103,7 +104,8 @@ def _handle_log_archiving(payload: dict, repo: ChatRepository, llm) -> bool:
             session_id=session_id,
             user_input=user_input,
             bot_response=bot_response,
-            embedding=embedding
+            embedding=embedding,
+            s3_url=s3_url
         )
         return True
 
@@ -156,6 +158,7 @@ def _handle_mind_diary_event(payload: dict, repo: ChatRepository, llm) -> bool:
         except ValueError:
             logger.warning("마음일기 LLM 파싱 실패 -> Fallback")
             bot_response_dict = {
+                "emotion": "없음",
                 "empathy": llm_raw_response,
                 "detected_distortion": "분석 불가",
                 "analysis": "내용을 불러오지 못했습니다.",
@@ -169,6 +172,7 @@ def _handle_mind_diary_event(payload: dict, repo: ChatRepository, llm) -> bool:
 
         # 응답 포맷 정리
         final_bot_response = {
+            "emotion": top_emotion,
             "empathy": bot_response_dict.get("empathy", ""),
             "detected_distortion": bot_response_dict.get("detected_distortion", "MindDiary"),
             "analysis": bot_response_dict.get("analysis", ""),
