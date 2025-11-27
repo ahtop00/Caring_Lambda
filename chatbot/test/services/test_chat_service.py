@@ -51,7 +51,19 @@ def test_get_session_history_success():
     mock_repo = Mock(spec=ChatRepository)
 
     mock_rows = [
-        ("나는 바보야", {"empathy": "그렇지 않아요.", "socratic_question": "왜죠?"}, datetime.now(), None)
+        (
+            "나는 바보야",
+            {
+                "empathy": "그렇지 않아요.",
+                "socratic_question": "왜죠?",
+                "analysis": "자기비하적 사고입니다.",
+                "alternative_thought": "자신을 격려하세요.",
+                "detected_distortion": "흑백논리",
+                "emotion": "sad"
+            },
+            datetime.now(),
+            None
+        )
     ]
     mock_total_count = 10
 
@@ -70,5 +82,11 @@ def test_get_session_history_success():
     assert result.messages[0].content == "나는 바보야"
     assert result.messages[0].s3_url is None
 
-    assert result.messages[1].role == "assistant"
-    assert result.messages[1].content == "그렇지 않아요. 왜죠?"
+    assistant_msg = result.messages[1]
+    assert assistant_msg.role == "assistant"
+    assert assistant_msg.content == "그렇지 않아요."
+    assert assistant_msg.detected_distortion == "흑백논리"
+    assert assistant_msg.analysis == "자기비하적 사고입니다."
+    assert assistant_msg.socratic_question == "왜죠?"
+    assert assistant_msg.alternative_thought == "자신을 격려하세요."
+    assert assistant_msg.emotion == "sad"
