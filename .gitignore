@@ -1,3 +1,5 @@
 /.idea/
 /chatbot/.env
 /chatbot/.coverage
+__pycache__/
+chatbot/**/__pycache__/

@@ -125,6 +125,7 @@ def _handle_mind_diary_event(payload: dict, repo: ChatRepository, llm) -> bool:
         user_name = payload.get('user_name', '사용자')
         question = payload.get('question', '(자유 일기)')
         content = payload.get('content')
+        s3_url = payload.get('s3_url')
         recorded_at = payload.get('recorded_at', '알 수 없음')
 
         # 필수 데이터 확인
@@ -186,7 +187,8 @@ def _handle_mind_diary_event(payload: dict, repo: ChatRepository, llm) -> bool:
             session_id=new_session_id,
             user_input="(마음일기 기반 선제 대화)", # 식별용 마커
             bot_response=final_bot_response,
-            embedding=[0.0] * 1024
+            embedding=[0.0] * 1024,
+            s3_url=s3_url
         )
 
         logger.info(f"선제 대화 생성 완료: session_id={new_session_id}")
