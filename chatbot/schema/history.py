@@ -23,8 +23,15 @@ class ChatMessage(BaseModel):
     content: str = Field(..., description="대화 내용")
     timestamp: datetime
     # 봇 응답일 경우 추가 정보
-    distortion: Optional[str] = None
-    empathy: Optional[str] = None
+    detected_distortion: Optional[str] = Field(
+        None,
+        description="탐지된 인지 왜곡 유형"
+    )
+    empathy: Optional[str] = Field(None, description="공감 문장")
+    analysis: Optional[str] = Field(None, description="인지 왜곡 분석 설명")
+    socratic_question: Optional[str] = Field(None, description="소크라테스식 질문")
+    alternative_thought: Optional[str] = Field(None, description="대안적 사고 제안")
+    emotion: Optional[str] = Field(None, description="감정 라벨")
     # 음성 파일 URL (사용자 메시지인 경우)
     s3_url: Optional[str] = Field(None, description="업로드된 음성 파일 URL")
 

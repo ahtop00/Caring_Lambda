@@ -63,7 +63,17 @@ class ChatService:
             messages = []
             for r in rows:
                 # r: (user_input, bot_response, created_at, s3_url)
-                bot_res = r[1] if isinstance(r[1], dict) else {}
+                raw_bot_res = r[1]
+                if isinstance(raw_bot_res, str):
+                    try:
+                        bot_res = json.loads(raw_bot_res)
+                    except Exception:
+                        bot_res = {}
+                elif isinstance(raw_bot_res, dict):
+                    bot_res = raw_bot_res
+                else:
+                    bot_res = {}
+
                 s3_url = r[3]
 
                 # 사용자 메시지
@@ -75,13 +85,16 @@ class ChatService:
                 ))
 
                 # 봇 메시지
-                bot_content = f"{bot_res.get('empathy', '')} {bot_res.get('socratic_question', '')}".strip()
                 messages.append(ChatMessage(
                     role="assistant",
-                    content=bot_content,
+                    content=bot_res.get("empathy", "") or "",
                     timestamp=r[2],
-                    distortion=bot_res.get("detected_distortion"),
-                    empathy=bot_res.get("empathy")
+                    detected_distortion=bot_res.get("detected_distortion"),
+                    empathy=bot_res.get("empathy"),
+                    analysis=bot_res.get("analysis"),
+                    socratic_question=bot_res.get("socratic_question"),
+                    alternative_thought=bot_res.get("alternative_thought"),
+                    emotion=bot_res.get("emotion")
                 ))
 
             return ChatHistoryResponse(
