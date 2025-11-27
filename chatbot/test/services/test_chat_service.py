@@ -50,9 +50,8 @@ def test_get_session_history_success():
     """
     mock_repo = Mock(spec=ChatRepository)
 
-    # (user_input, bot_response, created_at)
     mock_rows = [
-        ("나는 바보야", {"empathy": "그렇지 않아요.", "socratic_question": "왜죠?"}, datetime.now())
+        ("나는 바보야", {"empathy": "그렇지 않아요.", "socratic_question": "왜죠?"}, datetime.now(), None)
     ]
     mock_total_count = 10
 
@@ -66,8 +65,10 @@ def test_get_session_history_success():
 
     # 검증
     assert isinstance(result, ChatHistoryResponse)
-    assert len(result.messages) == 2 # 사용자 메시지 1개 + 봇 메시지 1개 = 총 2개
+    assert len(result.messages) == 2
     assert result.messages[0].role == "user"
     assert result.messages[0].content == "나는 바보야"
+    assert result.messages[0].s3_url is None
+
     assert result.messages[1].role == "assistant"
-    assert result.messages[1].content == "그렇지 않아요. 왜죠?" # 합쳐진 텍스트 확인
+    assert result.messages[1].content == "그렇지 않아요. 왜죠?"
