@@ -2,6 +2,7 @@
 import json
 import boto3
 import logging
+import requests
 from botocore.exceptions import ClientError
 from functools import lru_cache
 
@@ -53,6 +54,50 @@ class LLMService:
         except Exception as e:
             logger.error(f"Vertex AI 초기화 실패: {e}")
             return None
+
+    def get_gemma_response(self, prompt: str, max_tokens: int = 512) -> str:
+        """
+        Hugging Face Endpoint에 배포된 Gemma 3 모델을 호출합니다.
+        """
+        # 1. 설정 확인
+        if not config.hf_endpoint_url or not config.hf_api_token:
+            error_msg = "오류: HF_ENDPOINT_URL 또는 HF_API_TOKEN이 설정되지 않았습니다."
+            logger.error(error_msg)
+            return json.dumps({"empathy": error_msg}, ensure_ascii=False)
+
+        headers = {
+            "Authorization": f"Bearer {config.hf_api_token}",
+            "Content-Type": "application/json"
+        }
+
+        # 2. 페이로드 구성
+        payload = {
+            "inputs": f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n",
+            "parameters": {
+                "max_new_tokens": max_tokens,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "return_full_text": False
+            }
+        }
+
+        # 3. 요청 전송 및 응답 처리 (이 부분이 누락되어 있었음)
+        try:
+            response = requests.post(config.hf_endpoint_url, headers=headers, json=payload, timeout=30)
+
+            if response.status_code == 200:
+                result = response.json()
+                # TGI 응답 형태 처리 (리스트 또는 딕셔너리)
+                if isinstance(result, list):
+                    return result[0]['generated_text']
+                return result.get('generated_text', '')
+            else:
+                logger.error(f"HF Endpoint Error: {response.status_code} - {response.text}")
+                return json.dumps({"empathy": f"API 호출 오류: {response.status_code}"}, ensure_ascii=False)
+
+        except Exception as e:
+            logger.error(f"Gemma 연결 실패: {e}")
+            return json.dumps({"empathy": f"연결 실패: {str(e)}"}, ensure_ascii=False)
 
     def get_embedding(self, text: str) -> list[float]:
         body = json.dumps({"inputText": text})

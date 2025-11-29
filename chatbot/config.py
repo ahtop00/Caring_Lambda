@@ -16,6 +16,10 @@ class AppConfig:
         self.anthropic_api_key = os.environ.get('ANTHROPIC_API_KEY')
         self.gcp_ssm_param_name = os.environ.get('GCP_SSM_PARAM_NAME')
 
+        # Gemma 3 설정 (Hugging Face)
+        self.hf_endpoint_url = os.environ.get("HF_ENDPOINT_URL", "")
+        self.hf_api_token = os.environ.get("HF_API_TOKEN", "")
+
         # SQS 설정
         self.cbt_log_sqs_url = os.environ.get('CBT_LOG_SQS_URL')
         self.diary_to_chatbot_sqs_url = os.environ.get('DIARY_TO_CHATBOT_SQS_URL')

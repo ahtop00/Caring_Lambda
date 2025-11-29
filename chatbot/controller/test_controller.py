@@ -2,10 +2,15 @@
 import json
 import boto3
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
 from exception import AppError
-from schema.test import MindDiaryTestRequest
 from config import config
+
+from schema.test import MindDiaryTestRequest
+from schema.reframing import ReframingRequest, ReframingResponse
+from service.llm_service import LLMService, get_llm_service
+from prompts.reframing import REFRAMING_PROMPT_TEMPLATE
 
 router = APIRouter(tags=["Dev Test"])
 
@@ -69,4 +74,50 @@ def trigger_mind_diary_event(request: MindDiaryTestRequest):
             status_code=500,
             message="SQS 메시지 전송에 실패했습니다.",
             detail=str(e)
+        )
+
+@router.post(
+    "/chatbot/dev/reframing",
+    response_model=ReframingResponse,
+    summary="[개발용] Gemma 3 리프레이밍 실험",
+    description="""
+    운영 중인 리프레이밍 API와 **동일한 입력(Request)**을 받아, 
+    **Hugging Face Endpoint(Gemma 3)** 모델을 통해 답변을 생성합니다.
+    
+    - **목적**: 기존 모델(Claude/Gemini)과 Gemma 3의 상담 성능 비교 (A/B 테스트)
+    - **입력**: ReframingRequest (운영 API와 동일)
+    - **출력**: ReframingResponse (운영 API와 동일)
+    - **참고**: Dev 모드이므로 이전 대화 내역(History)은 비워둔 상태로 1회성 답변만 테스트합니다.
+    """
+)
+def test_reframing_gemma(
+        request: ReframingRequest,
+        service: LLMService = Depends(get_llm_service)
+):
+    full_prompt = REFRAMING_PROMPT_TEMPLATE.format(
+        history_text="(없음. 대화 시작)",
+        user_input=request.content
+    )
+
+    raw_response = service.get_gemma_response(full_prompt)
+
+    try:
+        # 마크다운 코드블록 제거 (```json ... ```)
+        cleaned_json = raw_response.replace("```json", "").replace("```", "").strip()
+        data = json.loads(cleaned_json)
+
+        return ReframingResponse(
+            empathy=data.get("empathy", "공감 내용을 불러오지 못했습니다."),
+            detected_distortion=data.get("detected_distortion", "분석 불가"),
+            analysis=data.get("analysis", "분석 내용을 생성 중 오류가 발생했습니다."),
+            socratic_question=data.get("socratic_question", "질문을 생성하지 못했습니다."),
+            alternative_thought=data.get("alternative_thought", "대안을 찾지 못했습니다.")
+        )
+    except json.JSONDecodeError:
+        return ReframingResponse(
+            empathy=f"[JSON 파싱 실패] 모델 응답: {raw_response}",
+            detected_distortion="에러",
+            analysis="에러",
+            socratic_question="에러",
+            alternative_thought="에러"
         )
