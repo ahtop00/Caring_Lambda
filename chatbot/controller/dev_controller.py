@@ -72,31 +72,38 @@ def trigger_mind_diary_event(request: MindDiaryTestRequest):
 @router.post(
     "/chatbot/dev/reframing",
     response_model=ReframingResponse,
-    summary="[DEV] Gemma 3 리프레이밍 실험",
+    summary="[DEV] Gemma 2 리프레이밍 실험 (Fine-tuned)",
     description="""
-    운영 중인 `/chatbot/reframing` API와 **동일한 입력(Request)과 출력(Response)** 규격을 가집니다.
-    내부적으로 DB를 조회하지 않고, **Gemma 3 (Hugging Face)** 모델을 호출하여 답변을 생성합니다.
-    
-    - **목적**: 기존 모델(Claude/Gemini)과 Gemma 3의 상담 성능 직접 비교 (A/B 테스트)
-    - **입력**: ReframingRequest (`user_input` 필수)
-    - **출력**: ReframingResponse (공감, 분석, 질문, 대안 등)
-    - **제약**: Dev 모드이므로 이전 대화 내역(History)은 반영되지 않습니다.
+    Fine-tuning된 Gemma 2 모델을 사용합니다.
+    복잡한 프롬프트 없이 사용자 입력(User Input)만 전달하여 모델 자체의 학습된 능력으로 답변을 생성합니다.
     """
 )
 def dev_reframing_gemma(
         request: ReframingRequest,
         service: LLMService = Depends(get_llm_service)
 ):
-    full_prompt = REFRAMING_PROMPT_TEMPLATE.format(
-        history_text="(없음. 대화 시작)",
-        user_input=request.user_input
-    )
+    # [변경 사항]
+    # 거대한 REFRAMING_PROMPT_TEMPLATE과 .format() 과정을 제거했습니다.
+    # 학습된 모델이므로 사용자 입력 텍스트만 그대로 전달합니다.
 
-    raw_response = service.get_gemma_response(full_prompt)
+    # 만약 학습 데이터가 "User: {text}" 형태였다면 그 형식을 맞춰줘야 할 수도 있습니다.
+    # 여기서는 가장 순수한 형태인 입력값 자체를 전달합니다.
+    input_text = request.user_input
+
+    # 서비스 호출 (이제 input_text는 수십 토큰 수준으로 매우 짧아집니다)
+    raw_response = service.get_gemma_response(input_text)
 
     try:
-        # 마크다운 코드블록 제거 (```json ... ```)
-        cleaned_json = raw_response.replace("```json", "").replace("```", "").strip()
+        # Gemma 3가 JSON 외에 잡담을 섞는 경우를 대비한 클리닝 (기존 로직 유지)
+        cleaned_json = raw_response.replace("``````", "").strip()
+
+        # 혹시 모델이 JSON만 뱉지 않고 앞뒤로 사족을 달 경우를 대비해
+        # '{' 로 시작해서 '}' 로 끝나는 부분만 추출하는 로직을 추가하면 더 안전합니다.
+        if "{" in cleaned_json and "}" in cleaned_json:
+            start_idx = cleaned_json.find("{")
+            end_idx = cleaned_json.rfind("}") + 1
+            cleaned_json = cleaned_json[start_idx:end_idx]
+
         data = json.loads(cleaned_json)
 
         return ReframingResponse(
@@ -105,7 +112,7 @@ def dev_reframing_gemma(
             analysis=data.get("analysis", "분석 내용을 생성 중 오류가 발생했습니다."),
             socratic_question=data.get("socratic_question", "질문을 생성하지 못했습니다."),
             alternative_thought=data.get("alternative_thought", "대안을 찾지 못했습니다."),
-            emotion=data.get("top_emotion", None) # 감정 필드 추가
+            emotion=data.get("top_emotion", None) or data.get("emotion", None)
         )
     except json.JSONDecodeError:
         logger.error(f"JSON 파싱 실패. 원본 응답: {raw_response}")
