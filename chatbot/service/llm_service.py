@@ -81,9 +81,9 @@ class LLMService:
             }
         }
 
-        # 3. 요청 전송 및 응답 처리 (이 부분이 누락되어 있었음)
+        api_url = f"{config.hf_endpoint_url.rstrip('/')}/v1/chat/completions"
         try:
-            response = requests.post(config.hf_endpoint_url, headers=headers, json=payload, timeout=30)
+            response = requests.post(api_url, headers=headers, json=payload, timeout=30)
 
             if response.status_code == 200:
                 result = response.json()
