@@ -26,7 +26,7 @@ class LLMService:
 
     # vLLM에 로드된 모델명 (서버 로그나 curl /v1/models로 확인된 ID 사용)
     # 만약 이름을 모르면 "/workspace/" 혹은 "default" 등을 시도
-    MODEL_ID_GEMMA = "0xMori/gemma-3-safori-cbt-merged"
+    MODEL_ID_GEMMA = "0xMori/gemma-2-9b-safori-cbt-merged"
 
     def __init__(self):
         # AWS Client 초기화
