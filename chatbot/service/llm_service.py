@@ -1,11 +1,9 @@
-# chatbot/service/llm_service.py
 import json
 import boto3
 import logging
-import requests
 from botocore.exceptions import ClientError
 from functools import lru_cache
-
+from openai import OpenAI, OpenAIError
 try:
     from config import config
 except ImportError:
@@ -26,12 +24,19 @@ class LLMService:
     MODEL_ID_BEDROCK_EMBEDDING = 'amazon.titan-embed-text-v2:0'
     MODEL_ID_GEMINI = "gemini-2.5-pro"
 
+    # vLLM에 로드된 모델명 (서버 로그나 curl /v1/models로 확인된 ID 사용)
+    # 만약 이름을 모르면 "/workspace/" 혹은 "default" 등을 시도
+    MODEL_ID_GEMMA = "0xMori/gemma-3-safori-cbt-merged"
+
     def __init__(self):
         # AWS Client 초기화
         self.bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='ap-northeast-2')
 
         # Vertex AI (Gemini) 초기화
         self.gemini_pro_model = self._init_gemini()
+
+        # Hugging Face (vLLM) 클라이언트 초기화
+        self.hf_client = self._init_hf_client()
 
     def _init_gemini(self):
         if not vertexai:
@@ -55,49 +60,61 @@ class LLMService:
             logger.error(f"Vertex AI 초기화 실패: {e}")
             return None
 
-    def get_gemma_response(self, prompt: str, max_tokens: int = 512) -> str:
+    def _init_hf_client(self):
         """
-        Hugging Face Endpoint에 배포된 Gemma 3 모델을 호출합니다.
+        OpenAI 호환 클라이언트를 초기화합니다 (vLLM용)
         """
-        # 1. 설정 확인
         if not config.hf_endpoint_url or not config.hf_api_token:
-            error_msg = "오류: HF_ENDPOINT_URL 또는 HF_API_TOKEN이 설정되지 않았습니다."
+            logger.warning("HF Endpoint URL 또는 Token이 설정되지 않아 vLLM 클라이언트를 초기화하지 않습니다.")
+            return None
+
+        try:
+            # vLLM/OpenAI 호환 주소 처리: 끝에 /v1 붙이기
+            base_url = f"{config.hf_endpoint_url.rstrip('/')}/v1"
+
+            client = OpenAI(
+                base_url=base_url,
+                api_key=config.hf_api_token
+            )
+            logger.info("HF vLLM(OpenAI) 클라이언트 초기화 성공")
+            return client
+        except Exception as e:
+            logger.error(f"HF 클라이언트 초기화 실패: {e}")
+            return None
+
+    def get_gemma_response(self, prompt: str, max_tokens: int = 2048) -> str:
+        """
+        vLLM에 배포된 Gemma 3 모델을 호출합니다. (OpenAI SDK 사용)
+        """
+
+        if not self.hf_client:
+            error_msg = "오류: vLLM 클라이언트가 초기화되지 않았습니다. 설정을 확인하세요."
             logger.error(error_msg)
             return json.dumps({"empathy": error_msg}, ensure_ascii=False)
 
-        headers = {
-            "Authorization": f"Bearer {config.hf_api_token}",
-            "Content-Type": "application/json"
-        }
+        messages = [
+            {"role": "user", "content": prompt}
+        ]
 
-        # 2. 페이로드 구성
-        payload = {
-            "inputs": f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n",
-            "parameters": {
-                "max_new_tokens": max_tokens,
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "return_full_text": False
-            }
-        }
-
-        api_url = f"{config.hf_endpoint_url.rstrip('/')}/v1/chat/completions"
         try:
-            response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+            response = self.hf_client.chat.completions.create(
+                model=self.MODEL_ID_GEMMA,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=0.7,
+                top_p=0.9
+            )
 
-            if response.status_code == 200:
-                result = response.json()
-                # TGI 응답 형태 처리 (리스트 또는 딕셔너리)
-                if isinstance(result, list):
-                    return result[0]['generated_text']
-                return result.get('generated_text', '')
-            else:
-                logger.error(f"HF Endpoint Error: {response.status_code} - {response.text}")
-                return json.dumps({"empathy": f"API 호출 오류: {response.status_code}"}, ensure_ascii=False)
+            result_text = response.choices[0].message.content
+            return result_text
+
+        except OpenAIError as e:
+            logger.error(f"vLLM 호출 오류 (OpenAI Error): {e}")
+            return json.dumps({"empathy": f"AI 모델 오류: {str(e)}"}, ensure_ascii=False)
 
         except Exception as e:
-            logger.error(f"Gemma 연결 실패: {e}")
-            return json.dumps({"empathy": f"연결 실패: {str(e)}"}, ensure_ascii=False)
+            logger.error(f"Gemma 연결 알 수 없는 오류: {e}")
+            return json.dumps({"empathy": f"시스템 오류: {str(e)}"}, ensure_ascii=False)
 
     def get_embedding(self, text: str) -> list[float]:
         body = json.dumps({"inputText": text})
