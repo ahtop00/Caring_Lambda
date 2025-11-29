@@ -81,28 +81,28 @@ def trigger_mind_diary_event(request: MindDiaryTestRequest):
     response_model=ReframingResponse,
     summary="[개발용] Gemma 3 리프레이밍 실험",
     description="""
-    운영 중인 리프레이밍 API와 **동일한 입력(Request)**을 받아, 
-    **Hugging Face Endpoint(Gemma 3)** 모델을 통해 답변을 생성합니다.
+    운영 중인 `/chatbot/reframing` API와 **동일한 입력(Request)과 출력(Response)** 규격을 가집니다.
+    내부적으로 DB를 조회하지 않고, **Gemma 3 (Hugging Face)** 모델을 호출하여 답변을 생성합니다.
     
-    - **목적**: 기존 모델(Claude/Gemini)과 Gemma 3의 상담 성능 비교 (A/B 테스트)
-    - **입력**: ReframingRequest (운영 API와 동일)
-    - **출력**: ReframingResponse (운영 API와 동일)
-    - **참고**: Dev 모드이므로 이전 대화 내역(History)은 비워둔 상태로 1회성 답변만 테스트합니다.
+    - **목적**: 기존 모델(Claude/Gemini)과 Gemma 3의 상담 성능 직접 비교 (A/B 테스트)
+    - **입력**: ReframingRequest (`user_input` 필수)
+    - **출력**: ReframingResponse (공감, 분석, 질문, 대안 등)
+    - **제약**: Dev 모드이므로 이전 대화 내역(History)은 반영되지 않습니다.
     """
 )
 def test_reframing_gemma(
         request: ReframingRequest,
         service: LLMService = Depends(get_llm_service)
 ):
+    # 운영 스키마인 ReframingRequest의 필드명은 'user_input'입니다.
     full_prompt = REFRAMING_PROMPT_TEMPLATE.format(
         history_text="(없음. 대화 시작)",
-        user_input=request.content
+        user_input=request.user_input
     )
 
     raw_response = service.get_gemma_response(full_prompt)
 
     try:
-        # 마크다운 코드블록 제거 (```json ... ```)
         cleaned_json = raw_response.replace("```json", "").replace("```", "").strip()
         data = json.loads(cleaned_json)
 
@@ -111,7 +111,8 @@ def test_reframing_gemma(
             detected_distortion=data.get("detected_distortion", "분석 불가"),
             analysis=data.get("analysis", "분석 내용을 생성 중 오류가 발생했습니다."),
             socratic_question=data.get("socratic_question", "질문을 생성하지 못했습니다."),
-            alternative_thought=data.get("alternative_thought", "대안을 찾지 못했습니다.")
+            alternative_thought=data.get("alternative_thought", "대안을 찾지 못했습니다."),
+            emotion=data.get("top_emotion", None) # 감정 필드 추가
         )
     except json.JSONDecodeError:
         return ReframingResponse(
