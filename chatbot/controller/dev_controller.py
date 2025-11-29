@@ -1,38 +1,31 @@
-# chatbot/controller/test_controller.py
+# chatbot/controller/dev_controller.py
 import json
 import boto3
+import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends
-
 from exception import AppError
 from config import config
-
 from schema.test import MindDiaryTestRequest
 from schema.reframing import ReframingRequest, ReframingResponse
 from service.llm_service import LLMService, get_llm_service
 from prompts.reframing import REFRAMING_PROMPT_TEMPLATE
 
-router = APIRouter(tags=["Dev Test"])
+logger = logging.getLogger()
+router = APIRouter(tags=["Dev / Experiment"])
 
 @router.post(
-    "/chatbot/test/sqs/mind-diary",
+    "/chatbot/dev/sqs/mind-diary",
     summary="[개발용] 마음일기 분석 완료 이벤트 SQS 전송 테스트",
     description="""
     마음일기 서비스(caring-back)에서 분석이 완료된 상황을 시뮬레이션하여 SQS 메시지를 강제로 전송합니다.
-    
-    - **목적**: 챗봇의 '선제적 대화(Proactive Message)' 생성 로직 검증
-    - **동작**: 입력받은 데이터를 SQS(`diary-to-chatbot-sqs`)로 전송 -> 챗봇 Worker Lambda 트리거 -> DB에 대화 생성
-    - **테스트 확인**: 요청(request)시에 보낸 user_id를 이용해서 리스트를 검색해보세요. ai 분석이 끝나는 대로 새로운 대화가 확인 가능합니다.  
-    - **이후 대화**: 처음 대화 이후에 이어나가고 싶으면 기존 CBT 질문 API를 활용 해주세요.
     """
 )
 def trigger_mind_diary_event(request: MindDiaryTestRequest):
-    # 1. 전송할 SQS URL 확인 (Config 객체 사용)
+    # 1. 전송할 SQS URL 확인
     sqs_url = config.diary_to_chatbot_sqs_url
-
-    # [Fallback] 전용 큐 설정이 없다면 기존 로그 큐 사용 (테스트 편의성)
     if not sqs_url:
-        sqs_url = config.cbt_log_sqs_url
+        sqs_url = config.cbt_log_sqs_url # Fallback
 
     if not sqs_url:
         raise AppError(
@@ -79,7 +72,7 @@ def trigger_mind_diary_event(request: MindDiaryTestRequest):
 @router.post(
     "/chatbot/dev/reframing",
     response_model=ReframingResponse,
-    summary="[개발용] Gemma 3 리프레이밍 실험",
+    summary="[DEV] Gemma 3 리프레이밍 실험",
     description="""
     운영 중인 `/chatbot/reframing` API와 **동일한 입력(Request)과 출력(Response)** 규격을 가집니다.
     내부적으로 DB를 조회하지 않고, **Gemma 3 (Hugging Face)** 모델을 호출하여 답변을 생성합니다.
@@ -90,11 +83,10 @@ def trigger_mind_diary_event(request: MindDiaryTestRequest):
     - **제약**: Dev 모드이므로 이전 대화 내역(History)은 반영되지 않습니다.
     """
 )
-def test_reframing_gemma(
+def dev_reframing_gemma(
         request: ReframingRequest,
         service: LLMService = Depends(get_llm_service)
 ):
-    # 운영 스키마인 ReframingRequest의 필드명은 'user_input'입니다.
     full_prompt = REFRAMING_PROMPT_TEMPLATE.format(
         history_text="(없음. 대화 시작)",
         user_input=request.user_input
@@ -103,6 +95,7 @@ def test_reframing_gemma(
     raw_response = service.get_gemma_response(full_prompt)
 
     try:
+        # 마크다운 코드블록 제거 (```json ... ```)
         cleaned_json = raw_response.replace("```json", "").replace("```", "").strip()
         data = json.loads(cleaned_json)
 
@@ -115,6 +108,7 @@ def test_reframing_gemma(
             emotion=data.get("top_emotion", None) # 감정 필드 추가
         )
     except json.JSONDecodeError:
+        logger.error(f"JSON 파싱 실패. 원본 응답: {raw_response}")
         return ReframingResponse(
             empathy=f"[JSON 파싱 실패] 모델 응답: {raw_response}",
             detected_distortion="에러",

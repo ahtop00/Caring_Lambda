@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exceptions import RequestValidationError
 
-from controller import chat_controller, search_controller, report_controller, test_controller
+from controller import chat_controller, search_controller, report_controller, dev_controller
 
 from exception import (
     AppError,
@@ -44,7 +44,7 @@ app.add_exception_handler(Exception, global_exception_handler)
 app.include_router(search_controller.router)
 app.include_router(chat_controller.router)
 app.include_router(report_controller.router)
-app.include_router(test_controller.router)
+app.include_router(dev_controller.router)
 
 @app.get("/chatbot/health", tags=["Health Check"])
 def health_check():
