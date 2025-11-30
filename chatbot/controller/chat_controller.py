@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Query, Depends
 from schema.reframing import ReframingRequest, ReframingResponse, VoiceReframingRequest
 from schema.history import SessionListResponse, ChatHistoryResponse
@@ -5,6 +6,7 @@ from domain.reframing_logic import ReframingService, get_reframing_service
 from domain.chat_logic import ChatService, get_chat_service
 from schema.common import COMMON_RESPONSES
 
+logger = logging.getLogger()
 router = APIRouter(tags=["CBT Reframing"])
 
 @router.post(
@@ -41,7 +43,21 @@ def reframing_endpoint(
         request: ReframingRequest,
         service: ReframingService = Depends(get_reframing_service)
 ):
-    return service.execute_reframing(request)
+    """텍스트 기반 상담 엔드포인트"""
+    logger.info(
+        f"리프레이밍 요청 시작 - user_id: {request.user_id}, session_id: {request.session_id}"
+    )
+    try:
+        result = service.execute_reframing(request)
+        logger.info(f"리프레이밍 요청 완료 - user_id: {request.user_id}, session_id: {request.session_id}")
+        return result
+    except Exception as e:
+        logger.error(
+            f"리프레이밍 요청 실패 - user_id: {request.user_id}, "
+            f"session_id: {request.session_id}, error: {e}",
+            exc_info=True
+        )
+        raise
 
 @router.post(
     "/chatbot/voice-reframing",
@@ -53,7 +69,22 @@ def voice_reframing_endpoint(
         request: VoiceReframingRequest,
         service: ReframingService = Depends(get_reframing_service)
 ):
-    return service.execute_voice_reframing(request)
+    """음성 기반 상담 엔드포인트"""
+    logger.info(
+        f"음성 리프레이밍 요청 시작 - user_id: {request.user_id}, "
+        f"session_id: {request.session_id}, emotion: {request.emotion.get('top_emotion', 'N/A')}"
+    )
+    try:
+        result = service.execute_voice_reframing(request)
+        logger.info(f"음성 리프레이밍 요청 완료 - user_id: {request.user_id}, session_id: {request.session_id}")
+        return result
+    except Exception as e:
+        logger.error(
+            f"음성 리프레이밍 요청 실패 - user_id: {request.user_id}, "
+            f"session_id: {request.session_id}, error: {e}",
+            exc_info=True
+        )
+        raise
 
 @router.get(
     "/chatbot/sessions",
@@ -66,7 +97,15 @@ def get_sessions(
         user_id: str,
         service: ChatService = Depends(get_chat_service)
 ):
-    return service.get_user_sessions(user_id)
+    """채팅방 목록 조회 엔드포인트"""
+    logger.info(f"채팅방 목록 조회 요청 - user_id: {user_id}")
+    try:
+        result = service.get_user_sessions(user_id)
+        logger.info(f"채팅방 목록 조회 완료 - user_id: {user_id}, count: {len(result.sessions)}")
+        return result
+    except Exception as e:
+        logger.error(f"채팅방 목록 조회 실패 - user_id: {user_id}, error: {e}", exc_info=True)
+        raise
 
 @router.get(
     "/chatbot/history/{session_id}",
@@ -80,4 +119,12 @@ def get_history(
         page: int = Query(1, ge=1),
         service: ChatService = Depends(get_chat_service)
 ):
-    return service.get_session_history(session_id, page)
+    """채팅 상세 조회 엔드포인트"""
+    logger.info(f"채팅 상세 조회 요청 - session_id: {session_id}, page: {page}")
+    try:
+        result = service.get_session_history(session_id, page)
+        logger.info(f"채팅 상세 조회 완료 - session_id: {session_id}, messages: {len(result.messages)}")
+        return result
+    except Exception as e:
+        logger.error(f"채팅 상세 조회 실패 - session_id: {session_id}, page: {page}, error: {e}", exc_info=True)
+        raise

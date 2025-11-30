@@ -11,7 +11,12 @@ logger = logging.getLogger()
 
 async def app_exception_handler(request: Request, exc: AppError):
     """우리가 정의한 비즈니스 예외 처리"""
-    logger.error(f"AppError 발생: {exc.message} ({exc.detail})")
+    # 요청 정보 포함한 상세 로깅
+    logger.error(
+        f"AppError 발생 - URL: {request.url.path}, Method: {request.method}, "
+        f"Status: {exc.status_code}, Message: {exc.message}, Detail: {exc.detail}",
+        exc_info=True
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -24,6 +29,10 @@ async def app_exception_handler(request: Request, exc: AppError):
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """FastAPI 기본 HTTPException 처리 (404 Not Found 등)"""
+    logger.warning(
+        f"HTTPException 발생 - URL: {request.url.path}, Method: {request.method}, "
+        f"Status: {exc.status_code}, Detail: {exc.detail}"
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -53,7 +62,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 async def global_exception_handler(request: Request, exc: Exception):
     """그 외 모든 예측하지 못한 시스템 에러 처리 (500)"""
-    logger.error(f"시스템 알 수 없는 오류: {exc}", exc_info=True)
+    # 요청 정보 포함한 상세 로깅
+    try:
+        body = await request.body()
+        body_str = body.decode('utf-8')[:500] if body else "None"
+    except:
+        body_str = "읽기 실패"
+    
+    logger.error(
+        f"시스템 알 수 없는 오류 발생 - URL: {request.url.path}, Method: {request.method}, "
+        f"Query: {dict(request.query_params)}, Body: {body_str}, Error: {exc}",
+        exc_info=True
+    )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={

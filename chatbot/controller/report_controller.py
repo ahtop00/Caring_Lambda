@@ -1,9 +1,11 @@
 # chatbot/controller/report_controller.py
+import logging
 from fastapi import APIRouter, Depends, Query
 from schema.history import WeeklyReportRequest, WeeklyReportResponse, MonthlyReportListResponse
 from domain.report_logic import ReportService, get_report_service
 from schema.common import COMMON_RESPONSES
 
+logger = logging.getLogger()
 router = APIRouter(tags=["Report"])
 
 @router.post(
@@ -17,7 +19,18 @@ def create_weekly_report(
         request: WeeklyReportRequest,
         service: ReportService = Depends(get_report_service)
 ):
-    return service.generate_weekly_report(request.user_id, request.target_date)
+    """주간 리포트 생성 엔드포인트"""
+    logger.info(f"주간 리포트 생성 요청 시작 - user_id: {request.user_id}, target_date: {request.target_date}")
+    try:
+        result = service.generate_weekly_report(request.user_id, request.target_date)
+        logger.info(f"주간 리포트 생성 완료 - user_id: {request.user_id}, report_id: {result.report_id}")
+        return result
+    except Exception as e:
+        logger.error(
+            f"주간 리포트 생성 실패 - user_id: {request.user_id}, target_date: {request.target_date}, error: {e}",
+            exc_info=True
+        )
+        raise
 
 @router.get(
     "/chatbot/report/monthly",
@@ -35,4 +48,15 @@ def get_monthly_reports(
         month: int = Query(..., ge=1, le=12, description="조회할 월 (1~12)"),
         service: ReportService = Depends(get_report_service)
 ):
-    return service.get_reports_by_month(user_id, year, month)
+    """월별 리포트 조회 엔드포인트"""
+    logger.info(f"월별 리포트 조회 요청 - user_id: {user_id}, year: {year}, month: {month}")
+    try:
+        result = service.get_reports_by_month(user_id, year, month)
+        logger.info(f"월별 리포트 조회 완료 - user_id: {user_id}, count: {len(result.reports)}")
+        return result
+    except Exception as e:
+        logger.error(
+            f"월별 리포트 조회 실패 - user_id: {user_id}, year: {year}, month: {month}, error: {e}",
+            exc_info=True
+        )
+        raise
