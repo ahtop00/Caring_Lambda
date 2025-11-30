@@ -6,10 +6,11 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 from exception import AppError
 from config import config
-from schema.test import MindDiaryTestRequest
+from schema.test import MindDiaryTestRequest, BatchWeeklyReportRequest, BatchWeeklyReportResponse
 from schema.reframing import ReframingRequest, ReframingResponse
 from service.llm_service import LLMService, get_llm_service
 from prompts.reframing import REFRAMING_PROMPT_TEMPLATE
+from domain.report_logic import ReportService, get_report_service
 
 logger = logging.getLogger()
 router = APIRouter(tags=["Dev / Experiment"])
@@ -116,3 +117,33 @@ def dev_reframing_gemma(
             socratic_question="에러",
             alternative_thought="에러"
         )
+
+@router.post(
+    "/chatbot/dev/report/weekly/batch",
+    response_model=BatchWeeklyReportResponse,
+    summary="[스케줄러용] 배치 주간 리포트 생성",
+    description="""
+    AWS EventBridge 스케줄러에서 호출하는 배치 처리 API입니다.
+    
+    전주(지난 주)에 해당하는 기간에 cbt_logs에 데이터가 있는 모든 사용자에 대해 주간 리포트를 생성합니다.
+    (월요일에 실행되면 그 전주 리포트를 생성)
+    
+    **동작 방식:**
+    1. `target_date`를 기준으로 전주(지난 주)의 시작일(월요일)~종료일(일요일)을 계산
+    2. 해당 기간에 cbt_logs에 데이터가 있는 모든 user_id 조회
+    3. 각 사용자별로 `/chatbot/report/weekly`와 동일한 로직으로 리포트 생성
+    4. 생성 결과(성공/실패)를 집계하여 반환
+    
+    **예시:**
+    - 월요일(2025-11-24)에 실행 → 전주(2025-11-17 ~ 2025-11-23) 리포트 생성
+    
+    **주의사항:**
+    - 이미 해당 주에 리포트가 생성된 사용자는 중복 생성될 수 있습니다.
+    - LLM 호출이 많아 처리 시간이 오래 걸릴 수 있습니다.
+    """
+)
+def batch_weekly_report(
+        request: BatchWeeklyReportRequest,
+        service: ReportService = Depends(get_report_service)
+):
+    return service.generate_weekly_reports_for_period(request.target_date)

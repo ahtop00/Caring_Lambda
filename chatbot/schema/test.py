@@ -1,6 +1,7 @@
 # chatbot/schema/test.py
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Dict
+from datetime import date
 
 class EmotionDetail(BaseModel):
     """감정별 세부 점수 (0.0 ~ 1.0)"""
@@ -54,3 +55,16 @@ class MindDiaryTestRequest(BaseModel):
             }
         }
     }
+
+class BatchWeeklyReportRequest(BaseModel):
+    """배치 주간 리포트 생성 요청 (AWS 스케줄러용)"""
+    target_date: date = Field(..., description="현재 날짜 (YYYY-MM-DD, 전주의 시작일~종료일 계산에 사용, 월요일 실행 시 전주 리포트 생성)")
+
+class BatchWeeklyReportResponse(BaseModel):
+    """배치 주간 리포트 생성 응답"""
+    success_count: int = Field(..., description="성공적으로 생성된 리포트 수")
+    failed_count: int = Field(..., description="생성 실패한 리포트 수")
+    skipped_count: int = Field(..., description="스킵된 리포트 수 (이미 존재하거나 로그 없음)")
+    total_users: int = Field(..., description="처리 대상 사용자 수 (중복 제거 후)")
+    period: str = Field(..., description="리포트 생성 기간 (YYYY-MM-DD ~ YYYY-MM-DD)")
+    results: List[Dict] = Field(..., description="각 사용자별 생성 결과 상세")
