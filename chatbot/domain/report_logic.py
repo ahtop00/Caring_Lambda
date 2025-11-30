@@ -132,7 +132,7 @@ class ReportService:
                 detail=str(e)
             )
 
-    def generate_weekly_reports_for_period(self, target_date: date) -> dict:
+    def generate_weekly_reports_for_period(self, target_date: date, start_time=None, max_execution_time=870) -> dict:
         """
         전주(지난 주)에 해당하는 기간에 cbt_logs에 데이터가 있는 모든 사용자에 대해 주간 리포트를 생성합니다.
         AWS 스케줄러에서 호출하는 배치 처리 메서드입니다.
@@ -140,13 +140,19 @@ class ReportService:
         
         Args:
             target_date: 현재 날짜 (전주의 시작일~종료일 계산에 사용)
+            start_time: 작업 시작 시간 (time.time(), 타임아웃 체크용)
+            max_execution_time: 최대 실행 시간(초), 기본값 870초 (14분 30초)
         
         Returns:
             dict: {
                 "success_count": int,
                 "failed_count": int,
+                "skipped_count": int,
                 "total_users": int,
+                "processed_users": int,  # 실제 처리된 사용자 수
+                "remaining_users": int,  # 미처리 사용자 수 (타임아웃 시)
                 "period": str,
+                "is_timeout": bool,  # 타임아웃으로 인한 중단 여부
                 "results": List[dict]  # 각 사용자별 생성 결과
             }
         """
@@ -187,8 +193,34 @@ class ReportService:
             # 전주의 임의 날짜 (리포트 생성에 사용)
             prev_week_date = start_of_prev_week + timedelta(days=3)  # 전주 수요일
             
+            # 타임아웃 체크를 위한 안전 마진 (30초)
+            TIMEOUT_BUFFER_SECONDS = 30
+            
             # 각 사용자별로 리포트 생성
             for idx, user_id in enumerate(unique_user_ids, 1):
+                # 타임아웃 체크 (start_time이 제공된 경우)
+                if start_time:
+                    elapsed_time = time.time() - start_time
+                    remaining_time = max_execution_time - elapsed_time
+                    
+                    if remaining_time < TIMEOUT_BUFFER_SECONDS:
+                        logger.warning(
+                            f"타임아웃 임박 (경과: {elapsed_time:.1f}초, 남은 시간: {remaining_time:.1f}초). "
+                            f"처리 중단 - 완료: {idx-1}/{len(unique_user_ids)}"
+                        )
+                        # 현재까지의 결과 반환
+                        return {
+                            "success_count": success_count,
+                            "failed_count": failed_count,
+                            "skipped_count": skipped_count,
+                            "total_users": len(unique_user_ids),
+                            "processed_users": idx - 1,
+                            "remaining_users": len(unique_user_ids) - (idx - 1),
+                            "period": period_str,
+                            "is_timeout": True,
+                            "results": results
+                        }
+                
                 try:
                     # 이미 리포트가 존재하는지 확인
                     if self.report_repo.check_report_exists(user_id, start_of_prev_week, end_of_prev_week):
@@ -264,7 +296,10 @@ class ReportService:
                 "failed_count": failed_count,
                 "skipped_count": skipped_count,
                 "total_users": len(unique_user_ids),
+                "processed_users": len(unique_user_ids),
+                "remaining_users": 0,
                 "period": period_str,
+                "is_timeout": False,
                 "results": results
             }
             

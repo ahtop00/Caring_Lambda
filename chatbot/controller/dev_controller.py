@@ -2,6 +2,7 @@
 import json
 import boto3
 import logging
+import time
 from datetime import datetime
 from fastapi import APIRouter, Depends
 from exception import AppError
@@ -146,4 +147,27 @@ def batch_weekly_report(
         request: BatchWeeklyReportRequest,
         service: ReportService = Depends(get_report_service)
 ):
-    return service.generate_weekly_reports_for_period(request.target_date)
+    """배치 주간 리포트 생성 엔드포인트"""
+    start_time = time.time()
+    # Lambda 최대 타임아웃: 15분 (900초), 안전 마진: 30초
+    MAX_EXECUTION_TIME = 870  # 14분 30초
+    
+    logger.info(f"배치 주간 리포트 생성 요청 시작 - target_date: {request.target_date}")
+    
+    try:
+        result = service.generate_weekly_reports_for_period(
+            request.target_date, 
+            start_time=start_time,
+            max_execution_time=MAX_EXECUTION_TIME
+        )
+        elapsed_time = time.time() - start_time
+        logger.info(
+            f"배치 주간 리포트 생성 완료 - period: {result['period']}, "
+            f"성공: {result['success_count']}, 실패: {result['failed_count']}, 스킵: {result['skipped_count']}, "
+            f"타임아웃: {result['is_timeout']}, 미처리: {result['remaining_users']}, "
+            f"소요 시간: {elapsed_time:.1f}초"
+        )
+        return result
+    except Exception as e:
+        logger.error(f"배치 주간 리포트 생성 실패 - target_date: {request.target_date}, error: {e}", exc_info=True)
+        raise

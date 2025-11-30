@@ -66,5 +66,8 @@ class BatchWeeklyReportResponse(BaseModel):
     failed_count: int = Field(..., description="생성 실패한 리포트 수")
     skipped_count: int = Field(..., description="스킵된 리포트 수 (이미 존재하거나 로그 없음)")
     total_users: int = Field(..., description="처리 대상 사용자 수 (중복 제거 후)")
+    processed_users: int = Field(..., description="실제 처리 완료된 사용자 수")
+    remaining_users: int = Field(..., description="미처리 사용자 수 (타임아웃 발생 시 0이 아님)")
     period: str = Field(..., description="리포트 생성 기간 (YYYY-MM-DD ~ YYYY-MM-DD)")
+    is_timeout: bool = Field(..., description="타임아웃으로 인한 중단 여부")
     results: List[Dict] = Field(..., description="각 사용자별 생성 결과 상세")
