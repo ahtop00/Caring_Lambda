@@ -4,6 +4,7 @@ pydantic
 fastapi
 uvicorn
 mangum
+openai>=1.0.0
 # boto3 제거 (AWS 런타임 제공)
 # google-cloud-aiplatform 제거 (Layer로 제공)
 # google-auth 제거 (Layer로 제공)

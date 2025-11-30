@@ -126,7 +126,7 @@ def test_process_sqs_mind_diary_event(mock_get_db_conn, mock_get_llm, MockChatRe
     # 저장된 내용 검증
     _, kwargs = mock_repo_instance.log_cbt_session.call_args
     assert kwargs["user_id"] == "test_user"
-    assert kwargs["user_input"] == "(마음일기 기반 선제 대화)"
+    assert kwargs["user_input"] == "열심히 공부했는데 시험을 망쳐서 너무 슬퍼."
     # 봇 응답의 empathy가 LLM 결과와 일치하는지 확인
     assert kwargs["bot_response"]["empathy"] == "시험 때문에 많이 속상하셨겠어요."
 
