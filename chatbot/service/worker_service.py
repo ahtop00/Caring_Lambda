@@ -185,7 +185,7 @@ def _handle_mind_diary_event(payload: dict, repo: ChatRepository, llm) -> bool:
         repo.log_cbt_session(
             user_id=user_id,
             session_id=new_session_id,
-            user_input="(마음일기 기반 선제 대화)", # 식별용 마커
+            user_input=content, # 식별용 마커
             bot_response=final_bot_response,
             embedding=[0.0] * 1024,
             s3_url=s3_url
