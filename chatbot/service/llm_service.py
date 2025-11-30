@@ -116,6 +116,78 @@ class LLMService:
             logger.error(f"Gemma 연결 알 수 없는 오류: {e}")
             return json.dumps({"empathy": f"시스템 오류: {str(e)}"}, ensure_ascii=False)
 
+    def get_dynamic_model_response(
+        self, 
+        prompt: str, 
+        model_type: str = "gemini",
+        model_name: str = None,
+        hf_endpoint_url: str = None,
+        max_tokens: int = 2048
+    ) -> str:
+        """
+        동적으로 모델을 선택하여 응답을 생성합니다.
+        
+        Args:
+            prompt: 입력 프롬프트
+            model_type: 'gemini' 또는 'hf'
+            model_name: HF 모델명 (hf 타입일 경우 필수)
+            hf_endpoint_url: HF Endpoint URL (hf 타입일 경우 필수)
+            max_tokens: 최대 토큰 수
+        
+        Returns:
+            str: 모델 응답 텍스트
+        """
+        if model_type == "gemini":
+            return self._get_gemini_direct_response(prompt)
+        
+        elif model_type == "hf":
+            if not model_name or not hf_endpoint_url:
+                error_msg = "HF 모델 사용 시 model_name과 hf_endpoint_url이 필요합니다."
+                logger.error(error_msg)
+                return json.dumps({"empathy": error_msg}, ensure_ascii=False)
+            
+            # 환경변수에서 HF API Token 가져오기
+            hf_api_token = config.hf_api_token
+            if not hf_api_token:
+                error_msg = "HF API Token이 환경변수에 설정되지 않았습니다."
+                logger.error(error_msg)
+                return json.dumps({"empathy": error_msg}, ensure_ascii=False)
+            
+            # 동적 HF 클라이언트 생성
+            try:
+                base_url = f"{hf_endpoint_url.rstrip('/')}/v1"
+                dynamic_client = OpenAI(
+                    base_url=base_url,
+                    api_key=hf_api_token
+                )
+                
+                messages = [{"role": "user", "content": prompt}]
+                
+                response = dynamic_client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=0.7,
+                    top_p=0.9
+                )
+                
+                result_text = response.choices[0].message.content
+                logger.info(f"동적 HF 모델 호출 성공 - endpoint: {hf_endpoint_url}, model: {model_name}")
+                return result_text
+                
+            except OpenAIError as e:
+                logger.error(f"동적 HF 모델 호출 오류 (OpenAI Error): {e}")
+                return json.dumps({"empathy": f"AI 모델 오류: {str(e)}"}, ensure_ascii=False)
+            
+            except Exception as e:
+                logger.error(f"동적 HF 모델 연결 오류: {e}")
+                return json.dumps({"empathy": f"시스템 오류: {str(e)}"}, ensure_ascii=False)
+        
+        else:
+            error_msg = f"지원하지 않는 모델 타입: {model_type}. 'gemini' 또는 'hf'를 사용하세요."
+            logger.error(error_msg)
+            return json.dumps({"empathy": error_msg}, ensure_ascii=False)
+
     def get_embedding(self, text: str) -> list[float]:
         body = json.dumps({"inputText": text})
         try:

@@ -56,6 +56,24 @@ class MindDiaryTestRequest(BaseModel):
         }
     }
 
+class DevReframingRequest(BaseModel):
+    """개발용 리프레이밍 요청 (A/B 테스트용)"""
+    user_id: str = Field(..., description="사용자 식별 ID")
+    session_id: str = Field(..., description="대화 스레드 ID (랜덤 6자리)")
+    user_input: str = Field(..., description="현재 사용자의 발화")
+    model_type: str = Field(
+        "gemini",
+        description="모델 타입: 'gemini' 또는 'hf' (Hugging Face Endpoint)"
+    )
+    model_name: Optional[str] = Field(
+        None,
+        description="모델명 (hf 타입일 경우 필수, OpenAI 형식 모델명)"
+    )
+    hf_endpoint_url: Optional[str] = Field(
+        None,
+        description="HF Endpoint URL (hf 타입일 경우 필수, OpenAI 형식 호환)"
+    )
+
 class BatchWeeklyReportRequest(BaseModel):
     """배치 주간 리포트 생성 요청 (AWS 스케줄러용)"""
     target_date: date = Field(..., description="현재 날짜 (YYYY-MM-DD, 전주의 시작일~종료일 계산에 사용, 월요일 실행 시 전주 리포트 생성)")

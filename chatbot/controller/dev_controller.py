@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 from exception import AppError
 from config import config
-from schema.test import MindDiaryTestRequest, BatchWeeklyReportRequest, BatchWeeklyReportResponse
+from schema.test import MindDiaryTestRequest, BatchWeeklyReportRequest, BatchWeeklyReportResponse, DevReframingRequest
 from schema.reframing import ReframingRequest, ReframingResponse
 from service.llm_service import LLMService, get_llm_service
 from prompts.reframing import REFRAMING_PROMPT_TEMPLATE
@@ -74,33 +74,66 @@ def trigger_mind_diary_event(request: MindDiaryTestRequest):
 @router.post(
     "/chatbot/dev/reframing",
     response_model=ReframingResponse,
-    summary="[DEV] Gemma 2 리프레이밍 실험",
+    summary="[DEV] 동적 모델 리프레이밍 실험 (A/B 테스트)",
     description="""
     운영 중인 `/chatbot/reframing` API와 **동일한 입력(Request)과 출력(Response)** 규격을 가집니다.
-    내부적으로 DB를 조회하지 않고, **Gemma 2 (Hugging Face)** 모델을 호출하여 답변을 생성합니다.
+    내부적으로 DB를 조회하지 않고, **동적으로 선택한 모델**을 호출하여 답변을 생성합니다.
     
-    - **목적**: 기존 모델(Claude/Gemini)과 Gemma 3의 상담 성능 직접 비교 (A/B 테스트)
-    - **입력**: ReframingRequest (`user_input` 필수)
+    - **목적**: 다양한 모델(Claude/Gemini/HF Endpoint)의 상담 성능 직접 비교 (A/B 테스트)
+    - **모델 타입**: 
+      - `gemini`: Google Gemini 모델 사용 (기본값)
+      - `hf`: Hugging Face Endpoint (OpenAI 형식 호환) 사용
+    - **HF 모델 사용 시 필수**: `model_name`, `hf_endpoint_url` (HF API Token은 환경변수에서 자동 사용)
     - **출력**: ReframingResponse (공감, 분석, 질문, 대안 등)
     - **제약**: Dev 모드이므로 이전 대화 내역(History)은 반영되지 않습니다.
+    - **가능 모델**:
+        - gemini-2.5-pro (model_type: gemini)
+        - 0xMori/gemma-2-9b-safori-cbt-merged (model_type: hf)
+        - 0xMori/gemma-3-4b-safori-cbt-v1 (model_type: hf)
+    
+    **예시:**
+    ```json
+    {
+      "user_id": "test",
+      "session_id": "ABC123",
+      "user_input": "오늘 기분이 안 좋아요",
+      "model_type": "hf",
+      "model_name": "0xMori/gemma-2-9b-safori-cbt-merged",
+      "hf_endpoint_url": "https://xxx.endpoints.huggingface.cloud"
+    }
+    ```
     """
 )
-def dev_reframing_gemma(
-        request: ReframingRequest,
+def dev_reframing_dynamic(
+        request: DevReframingRequest,
         service: LLMService = Depends(get_llm_service)
 ):
+    """동적 모델 리프레이밍 엔드포인트"""
+    logger.info(
+        f"동적 리프레이밍 요청 시작 - user_id: {request.user_id}, "
+        f"model_type: {request.model_type}, model_name: {request.model_name or 'N/A'}"
+    )
+    
     full_prompt = REFRAMING_PROMPT_TEMPLATE.format(
         history_text="(없음. 대화 시작)",
         user_input=request.user_input
     )
 
-    raw_response = service.get_gemma_response(full_prompt)
+    # 동적 모델 호출
+    raw_response = service.get_dynamic_model_response(
+        prompt=full_prompt,
+        model_type=request.model_type,
+        model_name=request.model_name,
+        hf_endpoint_url=request.hf_endpoint_url
+    )
 
     try:
         # 마크다운 코드블록 제거 (```json ... ```)
         cleaned_json = raw_response.replace("```json", "").replace("```", "").strip()
         data = json.loads(cleaned_json)
 
+        logger.info(f"동적 리프레이밍 요청 완료 - user_id: {request.user_id}, model_type: {request.model_type}")
+        
         return ReframingResponse(
             empathy=data.get("empathy", "공감 내용을 불러오지 못했습니다."),
             detected_distortion=data.get("detected_distortion", "분석 불가"),
@@ -118,6 +151,9 @@ def dev_reframing_gemma(
             socratic_question="에러",
             alternative_thought="에러"
         )
+    except Exception as e:
+        logger.error(f"동적 리프레이밍 요청 실패 - user_id: {request.user_id}, error: {e}", exc_info=True)
+        raise
 
 @router.post(
     "/chatbot/dev/report/weekly/batch",
