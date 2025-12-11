@@ -70,6 +70,7 @@ class ReframingService:
                 user_input=request.user_input,
                 history=history,
                 emotion=request.emotion,
+                user_name=request.user_name or "내담자",
                 turn_count=turn_count
             )
 
@@ -117,7 +118,6 @@ class ReframingService:
         """
         [동기 저장 헬퍼 함수]
         SQS를 거치지 않고 직접 임베딩을 생성하고 DB에 저장합니다.
-        응답 속도가 약간 느려질 수 있지만(임베딩 시간), 데이터 정합성을 보장합니다.
         """
         # 임베딩 생성 (실패 시 0 벡터로 대체하여 흐름 끊기지 않게 함)
         embedding = []
