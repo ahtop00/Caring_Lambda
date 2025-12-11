@@ -8,7 +8,7 @@ from exception import AppError
 from config import config
 from prompts.reframing import get_reframing_prompt, get_voice_reframing_prompt
 from schema.reframing import ReframingRequest, VoiceReframingRequest
-from repository.chat_repository import ChatRepository, get_chat_repository, get_session_turn_count
+from repository.chat_repository import ChatRepository, get_chat_repository
 from service.llm_service import LLMService, get_llm_service
 from util.json_parser import parse_llm_json
 
