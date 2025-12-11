@@ -98,6 +98,19 @@ class ChatRepository:
             logger.error(f"상세 대화 조회 실패: {e}")
             return [], 0
 
+    def get_session_turn_count(self, session_id: str) -> int:
+        """session_id에 해당 하는 세션의 대화 횟수 조회"""
+        sql = "SELECT COUNT(*) FROM cbt_logs WHERE session_id = %s"
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(sql, (session_id,))
+                result = cur.fetchone()
+                # 결과가 없으면 0, 있으면 개수 반환
+                return result[0] if result else 0
+        except Exception as e:
+            logger.error(f"세션 턴 수 조회 실패: {e}")
+            return 0
+
 # --- 의존성 주입용 헬퍼 함수 ---
 def get_chat_repository(conn=Depends(get_db_conn)) -> ChatRepository:
     return ChatRepository(conn)

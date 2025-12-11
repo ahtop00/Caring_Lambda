@@ -8,7 +8,7 @@ from exception import AppError
 from config import config
 from prompts.reframing import get_reframing_prompt, get_voice_reframing_prompt
 from schema.reframing import ReframingRequest, VoiceReframingRequest
-from repository.chat_repository import ChatRepository, get_chat_repository
+from repository.chat_repository import ChatRepository, get_chat_repository, get_session_turn_count
 from service.llm_service import LLMService, get_llm_service
 from util.json_parser import parse_llm_json
 
@@ -25,9 +25,10 @@ class ReframingService:
         try:
             # [기억]
             history = self.chat_repo.get_chat_history(request.session_id, limit=5)
+            turn_count = self.chat_repo.get_session_turn_count(request.session_id)
 
             # [생각]
-            prompt = get_reframing_prompt(request.user_input, history)
+            prompt = get_reframing_prompt(request.user_input, history, turn_count)
 
             # [LLM]
             llm_raw_response = self.llm_service.get_llm_response(prompt, use_bedrock=False)
@@ -58,12 +59,14 @@ class ReframingService:
         try:
             # [기억]
             history = self.chat_repo.get_chat_history(request.session_id, limit=5)
+            turn_count = self.chat_repo.get_session_turn_count(request.session_id)
 
             # 2. [생각]
             prompt = get_voice_reframing_prompt(
                 user_input=request.user_input,
                 history=history,
-                emotion=request.emotion
+                emotion=request.emotion,
+                turn_count=turn_count
             )
 
             # [LLM]
