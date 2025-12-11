@@ -63,7 +63,7 @@ REFRAMING_PROMPT_TEMPLATE = """
     "analysis": "내담자를 위한 교육적 분석 코멘트",
     "socratic_question": "생각을 확장하거나 종료를 권유하는 질문",
     "alternative_thought": "건강한 대안적 사고 또는 지지와 격려",
-    "top_emotion": "happy, sad, neutral, angry, anxiety, surprise 중 택 1"
+    "top_emotion": "*반드시* happy, sad, neutral, angry, anxiety, surprise 중 *택 1*"
 }}
 """
 
@@ -132,7 +132,7 @@ VOICE_REFRAMING_PROMPT_TEMPLATE = """
     "analysis": "내담자를 위한 교육적 분석 코멘트",
     "socratic_question": "생각을 확장하거나 종료를 권유하는 질문",
     "alternative_thought": "건강한 대안적 사고 또는 지지와 격려",
-    "top_emotion": "happy, sad, neutral, angry, anxiety, surprise 중 택 1"
+    "top_emotion": "**반드시** happy, sad, neutral, angry, anxiety, surprise 중 *택 1*"
 }}
 """
 
