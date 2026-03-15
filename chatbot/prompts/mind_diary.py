@@ -1,4 +1,5 @@
 # chatbot/prompts/mind_diary.py
+from prompts.emotion_strategies import get_emotion_strategy_block
 
 MIND_DIARY_PROMPT_TEMPLATE = """
 당신은 전문 심리상담사이자 CBT(인지행동치료) 전문가 '도란이'입니다.
@@ -13,7 +14,7 @@ MIND_DIARY_PROMPT_TEMPLATE = """
 - 주된 감정: {top_emotion}
 - 감정 세부 구성:
 {emotion_details_str}
-
+{emotion_strategy}
 [분석 기준: 인지 오류 및 긍정 상태]
 1. 흑백사고: 완전한 실패 아니면 대단한 성공, 양극단으로만 구분함.
 2. 선택적 추상: 부정적인 세부 사항에만 초점을 맞추고 긍정적인 전체 맥락을 무시함.
@@ -72,5 +73,6 @@ def get_mind_diary_prompt(
         content=content,
         top_emotion=top_emotion,
         emotion_details_str=details_str,
-        recorded_at=recorded_at
+        recorded_at=recorded_at,
+        emotion_strategy=get_emotion_strategy_block(top_emotion)
     )

@@ -7,6 +7,10 @@ class ReframingRequest(BaseModel):
     user_id: str = Field(..., description="사용자 식별 ID")
     session_id: str = Field(..., description="대화 스레드 ID (랜덤 6자리)")
     user_input: str = Field(..., description="현재 사용자의 발화")
+    emotion: Optional[str] = Field(
+        None,
+        description="감정 힌트 (happy, sad, neutral, angry, anxiety, surprise). 제공 시 감정 맞춤 CBT 전략이 적용됩니다."
+    )
 
 # --- 응답 (Response) ---
 class ReframingResponse(BaseModel):

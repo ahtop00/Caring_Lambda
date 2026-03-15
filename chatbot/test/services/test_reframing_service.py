@@ -130,3 +130,110 @@ def test_execute_voice_reframing_success():
     _, kwargs = mock_chat_repo.log_cbt_session.call_args
     assert kwargs["user_id"] == "user_voice"
     assert kwargs["s3_url"] == "https://s3.bucket/file.mp3" # URL이 DB 저장 메서드까지 잘 갔는지 확인
+
+
+def test_execute_reframing_with_emotion_strategy():
+    """
+    [Scenario] 텍스트 상담 + 감정 전략 블록 주입 테스트
+    emotion이 제공되면 프롬프트에 감정 맞춤 전략 블록이 포함되어야 한다.
+    """
+    mock_chat_repo = Mock(spec=ChatRepository)
+    mock_llm_service = Mock(spec=LLMService)
+    mock_llm_service.get_embedding.return_value = [0.1] * 1024
+    mock_chat_repo.get_chat_history.return_value = []
+    mock_chat_repo.get_session_turn_count.return_value = 1
+
+    llm_output = {
+        "empathy": "많이 불안하셨군요.",
+        "detected_distortion": "파국화",
+        "analysis": "분석...",
+        "socratic_question": "질문?",
+        "alternative_thought": "대안",
+        "top_emotion": "anxiety"
+    }
+    mock_llm_service.get_llm_response.return_value = json.dumps(llm_output)
+
+    service = ReframingService(chat_repo=mock_chat_repo, llm_service=mock_llm_service)
+
+    # emotion="anxiety" 제공
+    request = ReframingRequest(
+        user_id="user1", session_id="sess1",
+        user_input="시험이 너무 걱정돼요",
+        emotion="anxiety"
+    )
+    result = service.execute_reframing(request)
+
+    # LLM에 전달된 프롬프트에 전략 블록이 포함되었는지 검증
+    actual_prompt = mock_llm_service.get_llm_response.call_args[0][0]
+    assert "감정 맞춤 전략" in actual_prompt
+    assert "불안" in actual_prompt
+
+
+def test_execute_reframing_without_emotion_unchanged():
+    """
+    [Scenario] emotion=None 시 기존 동작과 동일한지 검증
+    프롬프트에 감정 전략 블록이 포함되지 않아야 한다.
+    """
+    mock_chat_repo = Mock(spec=ChatRepository)
+    mock_llm_service = Mock(spec=LLMService)
+    mock_llm_service.get_embedding.return_value = [0.1] * 1024
+    mock_chat_repo.get_chat_history.return_value = []
+    mock_chat_repo.get_session_turn_count.return_value = 1
+
+    llm_output = {
+        "empathy": "힘드셨군요.",
+        "detected_distortion": "흑백사고",
+        "analysis": "분석...",
+        "socratic_question": "질문?",
+        "alternative_thought": "대안",
+        "top_emotion": "sad"
+    }
+    mock_llm_service.get_llm_response.return_value = json.dumps(llm_output)
+
+    service = ReframingService(chat_repo=mock_chat_repo, llm_service=mock_llm_service)
+
+    # emotion 미제공 → None
+    request = ReframingRequest(
+        user_id="user1", session_id="sess1",
+        user_input="난 망했어"
+    )
+    result = service.execute_reframing(request)
+
+    # 프롬프트에 전략 블록이 없어야 함
+    actual_prompt = mock_llm_service.get_llm_response.call_args[0][0]
+    assert "감정 맞춤 전략" not in actual_prompt
+
+
+def test_execute_voice_reframing_includes_emotion_strategy():
+    """
+    [Scenario] 음성 상담: emotion dict의 top_emotion으로 전략 블록이 자동 주입되는지 확인
+    """
+    mock_chat_repo = Mock(spec=ChatRepository)
+    mock_llm_service = Mock(spec=LLMService)
+    mock_llm_service.get_embedding.return_value = [0.1] * 1024
+    mock_chat_repo.get_chat_history.return_value = []
+    mock_chat_repo.get_session_turn_count.return_value = 1
+
+    llm_output = {
+        "empathy": "화가 많이 나셨군요.",
+        "detected_distortion": "개인화",
+        "analysis": "분석...",
+        "socratic_question": "질문?",
+        "alternative_thought": "대안"
+    }
+    mock_llm_service.get_llm_response.return_value = json.dumps(llm_output)
+
+    service = ReframingService(chat_repo=mock_chat_repo, llm_service=mock_llm_service)
+
+    voice_request = VoiceReframingRequest(
+        user_id="user_voice",
+        session_id="sess_voice",
+        user_input="정말 화가 나요",
+        emotion={"top_emotion": "angry", "confidence": 0.9},
+    )
+    result = service.execute_voice_reframing(voice_request)
+
+    # LLM에 전달된 프롬프트에 분노 전략 블록이 포함되었는지 검증
+    actual_prompt = mock_llm_service.get_llm_response.call_args[0][0]
+    assert "감정 맞춤 전략" in actual_prompt
+    assert "분노" in actual_prompt

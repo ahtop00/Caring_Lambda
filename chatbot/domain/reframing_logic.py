@@ -26,7 +26,7 @@ class ReframingService:
             turn_count = self.chat_repo.get_session_turn_count(request.session_id)
 
             # [생각]
-            prompt = get_reframing_prompt(request.user_input, history, turn_count)
+            prompt = get_reframing_prompt(request.user_input, history, turn_count, emotion=request.emotion)
 
             # [LLM]
             llm_raw_response = self.llm_service.get_llm_response(prompt, use_bedrock=False)

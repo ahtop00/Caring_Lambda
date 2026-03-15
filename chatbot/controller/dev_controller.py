@@ -10,7 +10,7 @@ from config import config
 from schema.test import MindDiaryTestRequest, BatchWeeklyReportRequest, BatchWeeklyReportResponse, DevReframingRequest
 from schema.reframing import ReframingRequest, ReframingResponse
 from service.llm_service import LLMService, get_llm_service
-from prompts.reframing import REFRAMING_PROMPT_TEMPLATE
+from prompts.reframing import get_reframing_prompt
 from domain.report_logic import ReportService, get_report_service
 
 logger = logging.getLogger()
@@ -114,9 +114,10 @@ def dev_reframing_dynamic(
         f"model_type: {request.model_type}, model_name: {request.model_name or 'N/A'}"
     )
     
-    full_prompt = REFRAMING_PROMPT_TEMPLATE.format(
-        history_text="(없음. 대화 시작)",
-        user_input=request.user_input
+    full_prompt = get_reframing_prompt(
+        user_input=request.user_input,
+        history=[],
+        turn_count=1
     )
 
     # 동적 모델 호출

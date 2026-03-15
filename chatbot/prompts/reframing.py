@@ -1,5 +1,6 @@
 # chatbot/prompts/reframing.py
 import json
+from prompts.emotion_strategies import get_emotion_strategy_block
 
 # =============================================================================
 # [Text] 텍스트 상담용 템플릿
@@ -15,7 +16,7 @@ REFRAMING_PROMPT_TEMPLATE = """
 
 [현재 내담자의 말]
 "{user_input}"
-
+{emotion_strategy}
 **⭐⭐[핵심 지시사항: 텍스트 심층 분석]⭐⭐**
 내담자의 텍스트 표면에 드러난 말이 아닌, **행간에 숨겨진 감정**을 포착하세요.
 1. **'Neutral' 지양:** 특별한 감정 단어가 없더라도, 상황이 부정적이라면(예: "시험을 망쳤어") 'neutral' 대신 'sad'나 'anxiety'를 적극적으로 추론하세요.
@@ -109,7 +110,7 @@ VOICE_REFRAMING_PROMPT_TEMPLATE = """
 
 [이전 대화 맥락]
 {history_text}
-
+{emotion_strategy}
 [상담사 분석 가이드라인 (CBT 기반)]
 1. 흑백사고: 모든 것을 '성공 아니면 실패'로만 보는 이분법적 사고.
 2. 선택적 추상: 긍정적인 면은 무시하고 사소한 부정적 세부 사항에만 집착하는 것.
@@ -179,12 +180,13 @@ def _format_history(history: list) -> str:
         history_text += f"Turn {idx+1}:\n - 내담자: {past_input}\n - 상담사: {bot_msg}\n"
     return history_text
 
-def get_reframing_prompt(user_input: str, history: list, turn_count: int = 1) -> str:
+def get_reframing_prompt(user_input: str, history: list, turn_count: int = 1, emotion: str = None) -> str:
     """텍스트 상담용 (user_name 없음, 프롬프트에서 추론 유도)"""
     return REFRAMING_PROMPT_TEMPLATE.format(
         user_input=user_input,
         history_text=_format_history(history),
-        turn_count=turn_count
+        turn_count=turn_count,
+        emotion_strategy=get_emotion_strategy_block(emotion)
     )
 
 def get_voice_reframing_prompt(user_input: str, history: list, emotion: dict, user_name: str = "내담자", turn_count: int = 1) -> str:
@@ -200,5 +202,6 @@ def get_voice_reframing_prompt(user_input: str, history: list, emotion: dict, us
         emotion_desc=emotion_desc,
         history_text=_format_history(history),
         user_input=user_input,
-        turn_count=turn_count
+        turn_count=turn_count,
+        emotion_strategy=get_emotion_strategy_block(top_emotion)
     )
