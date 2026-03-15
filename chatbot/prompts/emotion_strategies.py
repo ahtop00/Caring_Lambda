@@ -115,6 +115,15 @@ EMOTION_STRATEGY_BLOCKS = {
 }
 
 
+_EMOTION_ANCHOR_PREFIX = """
+**⭐[감정 판단 가이드]⭐**
+외부 분석 시스템에서 내담자의 현재 감정을 **'{emotion}'**(으)로 판단했습니다.
+- 이 감정을 기본 프레임으로 삼아 상담을 진행하세요.
+- `top_emotion` 출력 시에도 이 감정을 우선적으로 반영하세요.
+- 단, 내담자의 말에서 **명백히 다른 감정이 확인**되면(예: 텍스트에 "화가 나" → angry) 그때는 텍스트 기반으로 판단해도 됩니다.
+"""
+
+
 def get_emotion_strategy_block(emotion: str = None) -> str:
     """
     감정 문자열로부터 CBT 전략 블록을 반환합니다.
@@ -127,4 +136,8 @@ def get_emotion_strategy_block(emotion: str = None) -> str:
     if not normalized:
         return ""
     canonical = _EMOTION_ALIASES.get(normalized, normalized)
-    return EMOTION_STRATEGY_BLOCKS.get(canonical, "")
+    strategy = EMOTION_STRATEGY_BLOCKS.get(canonical, "")
+    if not strategy:
+        return ""
+    anchor = _EMOTION_ANCHOR_PREFIX.format(emotion=canonical)
+    return anchor + strategy
