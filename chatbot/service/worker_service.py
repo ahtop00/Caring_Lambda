@@ -10,6 +10,7 @@ from service.llm_service import get_llm_service
 from repository.chat_repository import ChatRepository
 from prompts.mind_diary import get_mind_diary_prompt
 from util.json_parser import parse_llm_json
+from domain.emotion_mapper import map_hume_emotions, CATEGORY_KO
 
 logger = logging.getLogger()
 
@@ -124,30 +125,44 @@ def _handle_mind_diary_event(payload: dict, repo: ChatRepository, llm) -> bool:
         user_id = payload.get('user_id')
         user_name = payload.get('user_name', '사용자')
         question = payload.get('question', '(자유 일기)')
-        content = payload.get('content')
+        content = payload.get('content') or ''  # None → ''
         s3_url = payload.get('s3_url')
         recorded_at = payload.get('recorded_at', '알 수 없음')
 
-        # 필수 데이터 확인
-        if not user_id or not content:
-            logger.warning(f"마음일기 필수 필드 누락: {payload}")
+        # 필수 데이터 확인 (content 없어도 emotion_analysis 있으면 처리 가능)
+        emotion_analysis = payload.get('emotion_analysis')
+        if not user_id:
+            logger.warning(f"마음일기 필수 필드 누락 (user_id): {payload}")
+            return False
+        if not content and not emotion_analysis:
+            logger.warning(f"마음일기 처리 불가 — content와 emotion_analysis 모두 없음: user={user_id}")
             return False
 
-        # 감정 데이터 추출
+        # 감정 데이터 매핑
         emotion_data = payload.get('emotion', {})
-        top_emotion = emotion_data.get('top_emotion', 'neutral')
-        emotion_details = emotion_data.get('details', {}) # 세부 감정 수치
+        emotion_map_result = None
 
-        logger.info(f"마음일기 연동 시작: user={user_id}, emotion={top_emotion}")
+        if emotion_analysis:
+            emotion_map_result = map_hume_emotions(emotion_analysis)
+            logger.info(
+                f"마음일기 Hume 감정 매핑 완료: user={user_id}, "
+                f"primary={emotion_map_result.primary_category}, "
+                f"secondary={emotion_map_result.secondary_category}"
+            )
+        else:
+            # 기존 방식 (하위 호환) — emotion_map_result=None으로 진행
+            logger.info(f"마음일기 기존 감정 방식: user={user_id}, emotion={emotion_data.get('top_emotion')}")
 
-        # 프롬프트 생성 (세부 감정 전달)
+        logger.info(f"마음일기 연동 시작: user={user_id}, hasContent={bool(content)}")
+
+        # 프롬프트 생성
         prompt = get_mind_diary_prompt(
             user_name=user_name,
             question=question,
             content=content,
-            top_emotion=top_emotion,
-            emotion_details=emotion_details,
-            recorded_at=recorded_at
+            recorded_at=recorded_at,
+            emotion_map_result=emotion_map_result,
+            legacy_emotion=emotion_data,
         )
 
         # LLM 응답 생성 (첫 마디)
@@ -159,7 +174,6 @@ def _handle_mind_diary_event(payload: dict, repo: ChatRepository, llm) -> bool:
         except ValueError:
             logger.warning("마음일기 LLM 파싱 실패 -> Fallback")
             bot_response_dict = {
-                "emotion": "없음",
                 "empathy": llm_raw_response,
                 "detected_distortion": "분석 불가",
                 "analysis": "내용을 불러오지 못했습니다.",
@@ -170,6 +184,12 @@ def _handle_mind_diary_event(payload: dict, repo: ChatRepository, llm) -> bool:
         # 새로운 세션 ID 생성 (대문자+숫자 6자리)
         alphabet = string.ascii_uppercase + string.digits
         new_session_id = ''.join(secrets.choice(alphabet) for _ in range(6))
+
+        # 감정 레이블 결정
+        if emotion_map_result:
+            top_emotion = emotion_map_result.primary_category_en
+        else:
+            top_emotion = emotion_data.get('top_emotion', 'neutral')
 
         # 응답 포맷 정리
         final_bot_response = {

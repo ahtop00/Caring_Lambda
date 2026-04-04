@@ -3,12 +3,13 @@ import logging
 from fastapi import Depends
 
 from exception import AppError
-# from config import config  # SQS 설정 제거로 인해 불필요
 from prompts.reframing import get_reframing_prompt, get_voice_reframing_prompt
 from schema.reframing import ReframingRequest, VoiceReframingRequest
 from repository.chat_repository import ChatRepository, get_chat_repository
 from service.llm_service import LLMService, get_llm_service
 from util.json_parser import parse_llm_json
+from domain.emotion_mapper import map_hume_emotions, EmotionMapResult
+from domain.text_emotion_analyzer import analyze_text_emotion
 
 logger = logging.getLogger()
 
@@ -16,7 +17,6 @@ class ReframingService:
     def __init__(self, chat_repo: ChatRepository, llm_service: LLMService):
         self.chat_repo = chat_repo
         self.llm_service = llm_service
-        # self.sqs_client 제거 (동기 저장으로 변경)
 
     def execute_reframing(self, request: ReframingRequest) -> dict:
         """텍스트 기반 상담: LLM이 감정까지 추론"""
@@ -25,8 +25,28 @@ class ReframingService:
             history = self.chat_repo.get_chat_history(request.session_id, limit=5)
             turn_count = self.chat_repo.get_session_turn_count(request.session_id)
 
-            # [생각]
-            prompt = get_reframing_prompt(request.user_input, history, turn_count, emotion=request.emotion)
+            # [감정 분석] 텍스트 자체 감정 분석 (Hume 없이)
+            emotion_map_result = None
+            if request.emotion:
+                # 기존 방식: emotion 힌트가 제공된 경우
+                pass
+            else:
+                # 새 방식: Vertex AI로 자체 감정 분석
+                try:
+                    emotion_map_result = analyze_text_emotion(
+                        request.user_input, self.llm_service
+                    )
+                except Exception as e:
+                    logger.warning(f"텍스트 감정 분석 실패, 기본 모드로 진행: {e}")
+
+            # [생각] — emotion 힌트 또는 자체 분석 결과 사용
+            emotion_hint = request.emotion
+            if not emotion_hint and emotion_map_result:
+                emotion_hint = emotion_map_result.primary_category_en
+
+            prompt = get_reframing_prompt(
+                request.user_input, history, turn_count, emotion=emotion_hint
+            )
 
             # [LLM]
             llm_raw_response = self.llm_service.get_llm_response(prompt, use_bedrock=False)
@@ -42,6 +62,15 @@ class ReframingService:
             # [감정 데이터 처리]
             top_emotion = bot_response_dict.pop("top_emotion", "neutral")
             bot_response_dict["emotion"] = top_emotion
+
+            # [emotion_result 추가]
+            if emotion_map_result:
+                bot_response_dict["emotion_result"] = {
+                    "primary_category": emotion_map_result.primary_category,
+                    "secondary_category": emotion_map_result.secondary_category,
+                    "primary_emotions": emotion_map_result.primary_emotions,
+                    "sentiment_summary": emotion_map_result.sentiment_summary,
+                }
 
             # [동기 저장] 임베딩 생성 및 DB 직납 (유령 읽기 방지)
             self._save_session_sync(
@@ -59,19 +88,31 @@ class ReframingService:
             raise AppError(500, "상담 답변 생성 실패", str(e))
 
     def execute_voice_reframing(self, request: VoiceReframingRequest) -> dict:
-        """음성 기반 상담: 외부 분석 감정 데이터 활용"""
+        """음성 기반 상담: Hume AI 또는 기존 감정 데이터 활용"""
         try:
             # [기억]
             history = self.chat_repo.get_chat_history(request.session_id, limit=5)
             turn_count = self.chat_repo.get_session_turn_count(request.session_id)
 
+            # [감정 매핑]
+            emotion_map_result = None
+            if request.emotion_analysis:
+                # Hume AI 감정 분석 결과 매핑
+                emotion_analysis_dict = request.emotion_analysis.model_dump()
+                emotion_map_result = map_hume_emotions(emotion_analysis_dict)
+                logger.info(
+                    f"Hume 감정 매핑 완료 - primary: {emotion_map_result.primary_category}, "
+                    f"secondary: {emotion_map_result.secondary_category}"
+                )
+
             # [생각]
             prompt = get_voice_reframing_prompt(
                 user_input=request.user_input,
                 history=history,
-                emotion=request.emotion,
+                emotion=request.emotion if not emotion_map_result else None,
                 user_name=request.user_name or "내담자",
-                turn_count=turn_count
+                turn_count=turn_count,
+                emotion_map_result=emotion_map_result
             )
 
             # [LLM]
@@ -86,8 +127,21 @@ class ReframingService:
                 bot_response_dict = self._create_fallback_response(llm_raw_response)
 
             # [감정 데이터 처리]
-            raw_emotion = request.emotion.get("top_emotion", "neutral")
-            bot_response_dict["emotion"] = raw_emotion
+            if emotion_map_result:
+                bot_response_dict["emotion"] = emotion_map_result.primary_category_en
+                bot_response_dict["emotion_result"] = {
+                    "primary_category": emotion_map_result.primary_category,
+                    "secondary_category": emotion_map_result.secondary_category,
+                    "primary_emotions": emotion_map_result.primary_emotions,
+                    "sentiment_summary": emotion_map_result.sentiment_summary,
+                }
+            elif request.emotion:
+                # 기존 방식 (하위 호환)
+                raw_emotion = request.emotion.get("top_emotion", "neutral")
+                bot_response_dict["emotion"] = raw_emotion
+            else:
+                top_emotion = bot_response_dict.pop("top_emotion", "neutral")
+                bot_response_dict["emotion"] = top_emotion
 
             # [동기 저장] 임베딩 생성 및 DB 직납
             self._save_session_sync(
@@ -128,7 +182,7 @@ class ReframingService:
             logger.error(f"임베딩 생성 실패 (저장은 계속 진행): {e}")
             embedding = [0.0] * 1024  # 1024차원 0 벡터
 
-        # DB 저장
+        # DB 저장 (emotion_result는 bot_response JSON에 포함되어 저장됨)
         try:
             self.chat_repo.log_cbt_session(
                 user_id=user_id,
@@ -141,7 +195,6 @@ class ReframingService:
         except Exception as e:
             logger.error(f"DB 저장 실패: {e}")
             # 저장이 실패해도 사용자에게 답변은 전달되어야 하므로 예외를 다시 던지지 않음
-            # 필요 시 raise하여 500 에러 처리 가능
 
 # --- 의존성 주입용 함수 ---
 def get_reframing_service(

@@ -124,11 +124,15 @@ _EMOTION_ANCHOR_PREFIX = """
 """
 
 
-def get_emotion_strategy_block(emotion: str = None) -> str:
+def get_emotion_strategy_block(emotion: str = None, secondary_emotion: str = None) -> str:
     """
     감정 문자열로부터 CBT 전략 블록을 반환합니다.
     emotion이 None이거나 매핑되지 않는 값이면 빈 문자열을 반환합니다.
-    (빈 문자열 반환 시 프롬프트에 전략 블록이 주입되지 않아 기존 동작 유지)
+    secondary_emotion이 주어지면 복합 감정 전략 블록을 추가합니다.
+
+    Args:
+        emotion: 주요 감정 (영어 또는 한국어)
+        secondary_emotion: 2차 감정 (영어 또는 한국어, Optional)
     """
     if not emotion:
         return ""
@@ -140,4 +144,21 @@ def get_emotion_strategy_block(emotion: str = None) -> str:
     if not strategy:
         return ""
     anchor = _EMOTION_ANCHOR_PREFIX.format(emotion=canonical)
-    return anchor + strategy
+    result = anchor + strategy
+
+    # secondary emotion이 있으면 복합 감정 전략 추가
+    if secondary_emotion:
+        sec_normalized = secondary_emotion.strip().lower()
+        sec_canonical = _EMOTION_ALIASES.get(sec_normalized, sec_normalized)
+        sec_strategy = EMOTION_STRATEGY_BLOCKS.get(sec_canonical, "")
+        if sec_strategy and sec_canonical != canonical:
+            result += f"""
+**[복합 감정 안내: {canonical} + {sec_canonical}]**
+내담자에게서 '{canonical}'과 '{sec_canonical}' 감정이 동시에 감지되었습니다.
+- 두 감정이 공존하는 상황을 자연스럽게 인정해 주세요.
+- 예: "칭찬받아서 기쁘면서도 외로운 마음이 있으시군요" 처럼 양면을 읽어주세요.
+- CBT에서는 이런 복합 감정 속 긍정 경험을 인식하게 하는 것이 핵심입니다.
+{sec_strategy}
+"""
+
+    return result
