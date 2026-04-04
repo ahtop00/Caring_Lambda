@@ -59,3 +59,21 @@ class TestGetEmotionStrategyBlock:
             assert "치료적 태도" in block, f"'{emotion}' 블록에 '치료적 태도' 섹션 누락"
             assert "우선 기법" in block, f"'{emotion}' 블록에 '우선 기법' 섹션 누락"
             assert "금기" in block, f"'{emotion}' 블록에 '금기' 섹션 누락"
+
+    def test_secondary_emotion_adds_complex_block(self):
+        """secondary emotion이 있으면 복합 감정 전략 블록이 추가되어야 한다"""
+        result = get_emotion_strategy_block("happy", secondary_emotion="sad")
+        assert "감정 맞춤 전략" in result
+        assert "복합 감정 안내" in result
+        assert "happy + sad" in result
+
+    def test_secondary_same_as_primary_no_complex(self):
+        """secondary가 primary와 동일하면 복합 블록이 추가되지 않아야 한다"""
+        result = get_emotion_strategy_block("sad", secondary_emotion="sad")
+        assert "복합 감정 안내" not in result
+
+    def test_secondary_none_no_complex(self):
+        """secondary가 None이면 기존 동작과 동일"""
+        result = get_emotion_strategy_block("angry", secondary_emotion=None)
+        assert "복합 감정 안내" not in result
+        assert "감정 맞춤 전략" in result
