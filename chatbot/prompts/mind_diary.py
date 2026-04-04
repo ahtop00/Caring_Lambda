@@ -11,9 +11,7 @@ MIND_DIARY_PROMPT_TEMPLATE = """
 - 작성 일시: {recorded_at}
 
 [감정 분석 결과]
-- 주된 감정: {top_emotion}
-- 감정 세부 구성:
-{emotion_details_str}
+{emotion_desc}
 {emotion_strategy}
 [분석 기준: 인지 오류 및 긍정 상태]
 1. 흑백사고: 완전한 실패 아니면 대단한 성공, 양극단으로만 구분함.
@@ -50,29 +48,98 @@ MIND_DIARY_PROMPT_TEMPLATE = """
 }}
 """
 
+
+def _build_emotion_desc(emotion_map_result, legacy_emotion: dict) -> tuple[str, str]:
+    """
+    감정 분석 결과를 프롬프트용 문자열로 변환한다.
+
+    Returns:
+        (emotion_desc, primary_en) — primary_en은 strategy block 선택에 사용
+    """
+    if emotion_map_result:
+        primary = emotion_map_result.primary_category
+        primary_en = emotion_map_result.primary_category_en
+        secondary_en = emotion_map_result.secondary_category_en
+        confidence = emotion_map_result.confidence
+
+        desc = (
+            f"- 주된 감정: **{primary}** (강도: {confidence:.2f})\n"
+        )
+
+        if emotion_map_result.secondary_category:
+            desc += f"- 복합 감정: **{emotion_map_result.secondary_category}**도 함께 감지됨\n"
+
+        # 세부 감정 top3
+        if emotion_map_result.primary_emotions:
+            details = ", ".join(
+                f"{e['name']}({e['score']:.3f})"
+                for e in emotion_map_result.primary_emotions
+            )
+            desc += f"- 주요 세부 감정: {details}\n"
+
+        # 언어 감성 극성
+        if emotion_map_result.sentiment_summary is not None:
+            val = emotion_map_result.sentiment_summary
+            label = "부정적" if val < 4 else "긍정적" if val > 6 else "중립적"
+            desc += f"- 언어 감성 극성: {val:.1f}/9.0 ({label})\n"
+
+        # 발화별 감정 궤적
+        if emotion_map_result.emotion_trajectory:
+            desc += "\n[발화 흐름]\n"
+            for i, traj in enumerate(emotion_map_result.emotion_trajectory):
+                text = traj.get("text", "")
+                emo = traj.get("primary_emotion", "")
+                top = traj.get("top_emotions", [])
+                top_str = ", ".join(
+                    f"{e['name']}({e['score']:.2f})" for e in top[:2]
+                )
+                desc += f"  구간 {i + 1}: \"{text}\" → {emo} ({top_str})\n"
+
+        return desc, primary_en, secondary_en
+
+    else:
+        # 기존 방식 (하위 호환)
+        top_emotion = legacy_emotion.get('top_emotion', 'neutral')
+        details = legacy_emotion.get('details', {})
+        desc = f"- 주된 감정: {top_emotion}\n"
+        for emo, score in details.items():
+            if score > 0:
+                desc += f"  - {emo}: {int(score * 100)}%\n"
+        return desc, top_emotion, None
+
+
 def get_mind_diary_prompt(
         user_name: str,
         question: str,
         content: str,
-        top_emotion: str,
-        emotion_details: dict,
-        recorded_at: str
+        recorded_at: str,
+        emotion_map_result=None,
+        legacy_emotion: dict = None,
 ) -> str:
-    # 감정 수치를 보기 좋은 문자열로 변환 (예: - happy: 10% ...)
-    # 값이 0보다 큰 감정만 추려서 표시
-    details_str = ""
-    for emo, score in emotion_details.items():
-        if score > 0:
-            # 0.85 -> 85% 변환
-            percent = int(score * 100)
-            details_str += f"  - {emo}: {percent}%\n"
+    """
+    마음일기 프롬프트 생성.
+
+    Args:
+        user_name: 사용자 이름
+        question: 마음일기 질문
+        content: STT 변환 텍스트 (없으면 빈 문자열)
+        recorded_at: 기록 일시
+        emotion_map_result: EmotionMapResult (Hume 매핑 결과)
+        legacy_emotion: 기존 방식 감정 dict (하위 호환용)
+    """
+    content_display = content if content else "(음성으로 기록됨 — 텍스트 변환 없음)"
+
+    emotion_desc, primary_en, secondary_en = _build_emotion_desc(
+        emotion_map_result, legacy_emotion or {}
+    )
+
+    strategy = get_emotion_strategy_block(primary_en, secondary_en)
 
     return MIND_DIARY_PROMPT_TEMPLATE.format(
         user_name=user_name,
         question=question,
-        content=content,
-        top_emotion=top_emotion,
-        emotion_details_str=details_str,
+        content=content_display,
         recorded_at=recorded_at,
-        emotion_strategy=get_emotion_strategy_block(top_emotion)
+        emotion_desc=emotion_desc,
+        emotion_strategy=strategy,
     )
