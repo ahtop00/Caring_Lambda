@@ -189,13 +189,69 @@ def get_reframing_prompt(user_input: str, history: list, turn_count: int = 1, em
         emotion_strategy=get_emotion_strategy_block(emotion)
     )
 
-def get_voice_reframing_prompt(user_input: str, history: list, emotion: dict, user_name: str = "내담자", turn_count: int = 1) -> str:
-    """음성 상담용 (user_name 명시적으로 받음)"""
-    # 감정 데이터: {'top_emotion': 'anxiety', 'confidence': 0.9, ...}
-    top_emotion = emotion.get('top_emotion', 'neutral')
-    confidence = emotion.get('confidence', 0.0)
+def get_voice_reframing_prompt(
+        user_input: str,
+        history: list,
+        emotion: dict = None,
+        user_name: str = "내담자",
+        turn_count: int = 1,
+        emotion_map_result=None
+) -> str:
+    """
+    음성 상담용 프롬프트 생성 (user_name 명시적으로 받음)
 
-    emotion_desc = f"현재 내담자의 목소리 분석 결과, 주된 감정은 '{top_emotion}'이며 강도는 {confidence}입니다."
+    Args:
+        user_input: 사용자 발화 텍스트
+        history: 이전 대화 기록
+        emotion: 기존 감정 데이터 dict (하위 호환용)
+        user_name: 사용자 이름
+        turn_count: 현재 턴 수
+        emotion_map_result: EmotionMapResult (Hume 매핑 결과, 있으면 우선 사용)
+    """
+    if emotion_map_result:
+        # Hume AI 매핑 결과 사용
+        primary = emotion_map_result.primary_category
+        primary_en = emotion_map_result.primary_category_en
+        secondary_en = emotion_map_result.secondary_category_en
+        confidence = emotion_map_result.confidence
+
+        emotion_desc = f"현재 내담자의 음성 및 텍스트 분석 결과, 주된 감정은 **'{primary}'**이며 강도는 {confidence:.2f}입니다."
+
+        if emotion_map_result.secondary_category:
+            emotion_desc += f"\n2차 감정으로 **'{emotion_map_result.secondary_category}'**도 감지되었습니다."
+
+        # 감정 궤적 정보 추가
+        if emotion_map_result.emotion_trajectory:
+            emotion_desc += "\n\n[발화별 감정 변화 (궤적)]"
+            for i, traj in enumerate(emotion_map_result.emotion_trajectory):
+                text = traj.get("text", "")
+                emo = traj.get("primary_emotion", "")
+                top = traj.get("top_emotions", [])
+                top_str = ", ".join(f"{e['name']}({e['score']:.2f})" for e in top[:2])
+                emotion_desc += f"\n  구간 {i+1}: \"{text}\" → {emo} ({top_str})"
+
+        # 세부 감정 정보
+        if emotion_map_result.primary_emotions:
+            details = ", ".join(
+                f"{e['name']}({e['score']:.3f})"
+                for e in emotion_map_result.primary_emotions
+            )
+            emotion_desc += f"\n\n[주요 세부 감정] {details}"
+
+        # sentiment 정보
+        if emotion_map_result.sentiment_summary is not None:
+            sentiment_val = emotion_map_result.sentiment_summary
+            sentiment_label = "부정적" if sentiment_val < 4 else "긍정적" if sentiment_val > 6 else "중립적"
+            emotion_desc += f"\n[감정 극성] {sentiment_val:.1f}/9.0 ({sentiment_label})"
+
+        strategy = get_emotion_strategy_block(primary_en, secondary_en)
+    else:
+        # 기존 감정 데이터 사용 (하위 호환)
+        emotion = emotion or {}
+        top_emotion = emotion.get('top_emotion', 'neutral')
+        confidence = emotion.get('confidence', 0.0)
+        emotion_desc = f"현재 내담자의 목소리 분석 결과, 주된 감정은 '{top_emotion}'이며 강도는 {confidence}입니다."
+        strategy = get_emotion_strategy_block(top_emotion)
 
     return VOICE_REFRAMING_PROMPT_TEMPLATE.format(
         user_name=user_name,
@@ -203,5 +259,5 @@ def get_voice_reframing_prompt(user_input: str, history: list, emotion: dict, us
         history_text=_format_history(history),
         user_input=user_input,
         turn_count=turn_count,
-        emotion_strategy=get_emotion_strategy_block(top_emotion)
+        emotion_strategy=strategy
     )
