@@ -63,16 +63,23 @@ def reframing_endpoint(
     "/chatbot/voice-reframing",
     response_model=ReframingResponse,
     summary="음성 기반 상담 (감정 데이터 포함)",
-    description="caring-back에서 분석된 음성 감정 데이터를 포함하여 상담을 진행합니다."
+    description="Hume AI 또는 기존 감정 분석 데이터를 포함하여 음성 기반 상담을 진행합니다."
 )
 def voice_reframing_endpoint(
         request: VoiceReframingRequest,
         service: ReframingService = Depends(get_reframing_service)
 ):
     """음성 기반 상담 엔드포인트"""
+    # 감정 소스 로깅
+    if request.emotion_analysis:
+        emotion_log = f"hume (source={request.emotion_analysis.source})"
+    elif request.emotion:
+        emotion_log = request.emotion.get('top_emotion', 'N/A')
+    else:
+        emotion_log = "none"
     logger.info(
         f"음성 리프레이밍 요청 시작 - user_id: {request.user_id}, "
-        f"session_id: {request.session_id}, emotion: {request.emotion.get('top_emotion', 'N/A')}"
+        f"session_id: {request.session_id}, emotion: {emotion_log}"
     )
     try:
         result = service.execute_voice_reframing(request)
