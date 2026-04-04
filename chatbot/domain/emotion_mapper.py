@@ -134,7 +134,7 @@ def _extract_trajectory(emotion_analysis: dict) -> list:
     Returns: [{"text": "...", "time": {...}, "primary_emotion": "sad", "top_emotions": [...]}, ...]
     """
     trajectory = []
-    prosody = emotion_analysis.get("prosody", {})
+    prosody = emotion_analysis.get("prosody") or {}
     utterances = prosody.get("utterances", [])
 
     for utt in utterances:
@@ -190,7 +190,7 @@ def map_hume_emotions(emotion_analysis: dict) -> EmotionMapResult:
     total_weight = 0.0
 
     for model_name, weight in MODEL_WEIGHTS.items():
-        model_data = emotion_analysis.get(model_name, {})
+        model_data = emotion_analysis.get(model_name) or {}
         summary = model_data.get("summary", [])
         if not summary:
             continue
@@ -220,7 +220,7 @@ def map_hume_emotions(emotion_analysis: dict) -> EmotionMapResult:
     # 3. 상위 세부 감정 추출 (모든 summary 통합)
     all_emotions = {}
     for model_name in ["prosody", "language"]:
-        model_data = emotion_analysis.get(model_name, {})
+        model_data = emotion_analysis.get(model_name) or {}
         for item in model_data.get("summary", []):
             name = item.get("name", "")
             score = item.get("score", 0.0)
@@ -236,8 +236,8 @@ def map_hume_emotions(emotion_analysis: dict) -> EmotionMapResult:
     )[:3]
 
     # 4. sentiment 추출
-    language_data = emotion_analysis.get("language", {})
-    sentiment_data = language_data.get("sentiment", {})
+    language_data = emotion_analysis.get("language") or {}
+    sentiment_data = language_data.get("sentiment") or {}
     sentiment_summary = sentiment_data.get("weighted_mean")
 
     # 5. 감정 궤적 추출
